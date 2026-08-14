@@ -44,7 +44,14 @@ swift build -c release --product nosleep
 
 echo "▸ icona…"
 mkdir -p "$ROOT/.build/icon.iconset"
-swift "$ROOT/Scripts/MakeIcon.swift" "$ROOT/.build/icon-1024.png" >/dev/null
+# L'icona è un asset committato, non un disegno rifatto a ogni build: `Scripts/icon.sh` la rigenera
+# con ImageMagick, che serve a chi la ridisegna e non a chi compila. Se manca si torna al fulmine
+# disegnato in Swift, così la build non dipende da un file binario per funzionare.
+if [[ -f "$ROOT/Icon/icon-1024.png" ]]; then
+    cp "$ROOT/Icon/icon-1024.png" "$ROOT/.build/icon-1024.png"
+else
+    swift "$ROOT/Scripts/MakeIcon.swift" "$ROOT/.build/icon-1024.png" >/dev/null
+fi
 for size in 16 32 64 128 256 512; do
     sips -z $size $size "$ROOT/.build/icon-1024.png" \
         --out "$ROOT/.build/icon.iconset/icon_${size}x${size}.png" >/dev/null
