@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/hero.webp" width="760" alt="The words NO SLEEP burning on a dark cathode-ray screen, channels split into red and cyan, a violet flare above them, scanlines across the whole tube">
+  <img src="https://raw.githubusercontent.com/xmasyx/nosleep/main/docs/hero.webp" width="760" alt="The words NO SLEEP burning on a dark cathode-ray screen, channels split into red and cyan, a violet flare above them, scanlines across the whole tube">
   <h1>NoSleep</h1>
   <p><strong>Keeps your Mac awake for as long as the work actually lasts, on battery and with the lid shut, then lets it sleep again without being told.</strong></p>
 </div>
@@ -120,7 +120,7 @@ There is a third one you can switch off but probably should not: on battery, bel
 | **Arm automatically when work starts** | The first claim turns "keep awake" on by itself. | off |
 | **Release below 20% on battery** | A floor, chosen from 10/15/20/30/50. | **on** |
 
-<img src="docs/preferenze.png" width="420" alt="NoSleep preferences: the switches above, each with the sentence explaining what it does">
+<img src="https://raw.githubusercontent.com/xmasyx/nosleep/main/docs/preferenze.png" width="420" alt="NoSleep preferences: the switches above, each with the sentence explaining what it does">
 
 ## With Claude Code
 
