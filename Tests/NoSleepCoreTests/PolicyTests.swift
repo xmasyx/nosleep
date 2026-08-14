@@ -1,0 +1,394 @@
+import Testing
+@testable import NoSleepCore
+
+// I test della politica, che è l'unico posto dove si decide se una presa va aperta o chiusa.
+//
+// Ogni regola ha il suo **polo negativo**: non basta provare che con l'interruttore acceso succede
+// la cosa, bisogna provare che con l'interruttore spento NON succede. Senza il polo negativo, un
+// test che dice sempre sì passa lo stesso.
+
+@Suite("Politica — fine del lavoro")
+struct PolicyEndOfWorkTests {
+
+    @Test("ISC-33 — l'ultima prenotazione che cade molla entrambe le prese")
+    func releasesOnLastLease() {
+        let c = Config(screenAwake: true, lidAwake: true, releaseWhenWorkEnds: true)
+        let out = Policy.apply(.leases(from: 1, to: 0), to: c)
+        #expect(out.config.screenAwake == false)
+        #expect(out.config.lidAwake == false)
+        #expect(out.note != nil)
+    }
+
+    @Test("ISC-34 — con l'interruttore spento le prese restano (polo negativo)")
+    func keepsWhenToggleOff() {
+        let c = Config(screenAwake: true, lidAwake: true, releaseWhenWorkEnds: false)
+        let out = Policy.apply(.leases(from: 1, to: 0), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.config.lidAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("ISC-31 — da due a una non molla niente: c'è ancora lavoro vivo")
+    func twoToOneHoldsOn() {
+        let c = Config(screenAwake: true, lidAwake: true, releaseWhenWorkEnds: true)
+        let out = Policy.apply(.leases(from: 2, to: 1), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("da zero a zero non è un evento e non scrive una riga di registro")
+    func zeroToZeroIsSilent() {
+        let c = Config(screenAwake: false, lidAwake: false)
+        #expect(Policy.apply(.leases(from: 0, to: 0), to: c).changed == false)
+    }
+}
+
+@Suite("Politica — accensione automatica")
+struct PolicyAutoArmTests {
+
+    @Test("con l'interruttore acceso, la prima prenotazione accende lo schermo")
+    func armsOnFirstLease() {
+        let c = Config(autoArmOnWork: true)
+        let out = Policy.apply(.leases(from: 0, to: 1), to: c)
+        #expect(out.config.screenAwake == true)
+    }
+
+    @Test("ISC-40 — l'automatico NON accende mai il coperchio (AC-4)")
+    func neverArmsLid() {
+        let c = Config(autoArmOnWork: true)
+        let out = Policy.apply(.leases(from: 0, to: 1), to: c)
+        #expect(out.config.lidAwake == false)
+    }
+
+    @Test("con l'interruttore spento non accende niente (polo negativo)")
+    func doesNotArmWhenOff() {
+        let c = Config(autoArmOnWork: false)
+        let out = Policy.apply(.leases(from: 0, to: 3), to: c)
+        #expect(out.config.screenAwake == false)
+        #expect(out.changed == false)
+    }
+}
+
+@Suite("Politica — il termico vince su tutto")
+struct PolicyThermalTests {
+
+    @Test("ISC-22 — a `serious` molla tutto")
+    func releasesAtSerious() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.thermal(.serious), to: c)
+        #expect(out.config.screenAwake == false)
+        #expect(out.config.lidAwake == false)
+        #expect(out.note?.contains("caldo") == true)
+    }
+
+    @Test("a `critical` molla tutto")
+    func releasesAtCritical() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        #expect(Policy.apply(.thermal(.critical), to: c).config.screenAwake == false)
+    }
+
+    @Test("a `fair` non tocca niente (polo negativo)")
+    func holdsAtFair() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.thermal(.fair), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("ISC-23 — il rilascio termico non guarda nessun interruttore di comportamento")
+    func thermalIgnoresToggles() {
+        // Entrambi gli interruttori di comportamento messi nel verso che direbbe «non mollare».
+        let c = Config(screenAwake: true, lidAwake: true,
+                       releaseWhenWorkEnds: false, autoArmOnWork: false)
+        let out = Policy.apply(.thermal(.serious), to: c)
+        #expect(out.config.screenAwake == false)
+        #expect(out.config.lidAwake == false)
+    }
+
+    @Test("un livello sconosciuto si sbaglia verso il sicuro")
+    func unknownIsSafe() {
+        #expect(ThermalLevel.serious.forcesRelease == true)
+        #expect(ThermalLevel.nominal.forcesRelease == false)
+    }
+}
+
+@Suite("Stati di nascita")
+struct BirthStateTests {
+
+    @Test("ISC-40 — i quattro interruttori nascono come deciso")
+    func atBirth() {
+        let c = Config.atBirth
+        #expect(c.screenAwake == false)
+        #expect(c.lidAwake == false)
+        #expect(c.releaseWhenWorkEnds == true)   // sua decisione, 2026-08-07
+        #expect(c.autoArmOnWork == false)
+    }
+}
+
+@Suite("Politica — l'automatico acceso a lavoro già in corso")
+struct PolicyAutoArmLateTests {
+
+    @Test("acceso mentre un lavoro gira, si attiva subito")
+    func armsImmediately() {
+        let c = Config(autoArmOnWork: true)
+        let out = Policy.apply(.autoArmSwitchedOn(leases: 2), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed)
+    }
+
+    @Test("acceso senza lavori in corso non attiva niente (polo negativo)")
+    func doesNothingWithoutWork() {
+        let c = Config(autoArmOnWork: true)
+        #expect(Policy.apply(.autoArmSwitchedOn(leases: 0), to: c).changed == false)
+    }
+
+    @Test("non riaccende ciò che è già acceso, e non scrive una riga inutile")
+    func idempotent() {
+        let c = Config(screenAwake: true, autoArmOnWork: true)
+        #expect(Policy.apply(.autoArmSwitchedOn(leases: 3), to: c).changed == false)
+    }
+
+    @Test("non tocca mai il coperchio, nemmeno per questa strada (AC-4)")
+    func neverLid() {
+        let c = Config(autoArmOnWork: true)
+        #expect(Policy.apply(.autoArmSwitchedOn(leases: 1), to: c).config.lidAwake == false)
+    }
+}
+
+@Suite("Politica — le soglie sulla temperatura misurata")
+struct PolicyTemperatureTests {
+
+    @Test("batteria oltre soglia: molla tutto")
+    func hotBattery() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.temperature(board: 40, battery: 46), to: c)
+        #expect(out.config.screenAwake == false)
+        #expect(out.config.lidAwake == false)
+        #expect(out.note?.contains("batteria") == true)
+    }
+
+    @Test("il chip caldo NON molla niente: quegli 81 gradi sono normali")
+    func hotBoardDoesNothing() {
+        // I due casi veri del registro: `board 81` con `thermal "normale"`, cioè macOS non stava
+        // nemmeno abbassando le frequenze, e l'app spegneva con quattro lavori in corso. Quel
+        // sensore è `PMU tdev7`, due gradi dal die: è il chip, non la scocca.
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.temperature(board: 81, battery: 30), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("nemmeno un die bollente basta da solo: a quello risponde thermalState")
+    func veryHotBoardStillDoesNothing() {
+        // Apple Silicon sotto carico sta a cento gradi ed è normale, perché si difende da sé
+        // abbassando le frequenze. Se il sistema è davvero in difficoltà lo dice `ThermalLevel`,
+        // ed è quella la strada che molla la presa.
+        let c = Config(screenAwake: true, lidAwake: true)
+        #expect(Policy.apply(.temperature(board: 105, battery: 30), to: c).changed == false)
+    }
+
+    @Test("una normale ricostruzione dell'app NON deve far scattare la rete")
+    func ordinaryBuildIsFine() {
+        // I gradi misurati sul suo Mac il 7/08 mentre girava `build-app.sh`.
+        let c = Config(screenAwake: true, lidAwake: true)
+        #expect(Policy.apply(.temperature(board: 60, battery: 31), to: c).changed == false)
+    }
+
+    @Test("temperature normali: non tocca niente (polo negativo)")
+    func normalTemps() {
+        // I valori veri letti sul suo Mac il 7/08 a Mac fermo.
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.temperature(board: 46, battery: 35), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("sensori muti non sono un Mac caldo (polo negativo che conta)")
+    func missingSensorsDoNothing() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        let out = Policy.apply(.temperature(board: nil, battery: nil), to: c)
+        #expect(out.config.screenAwake == true)
+        #expect(out.changed == false)
+    }
+
+    @Test("un solo sensore basta, se è quello oltre soglia")
+    func oneSensorIsEnough() {
+        let c = Config(screenAwake: true, lidAwake: true)
+        #expect(Policy.apply(.temperature(board: nil, battery: 50), to: c).changed)
+    }
+}
+
+@Suite("Addormentare davvero, non solo mollare la presa")
+struct SleepDecisionTests {
+
+    private func d(lid: Bool = true, leases: Int = 0, screen: Bool = false,
+                   lidAwake: Bool = false, release: Bool = true) -> Bool {
+        SleepDecision.shouldSleep(lidClosed: lid, leases: leases, screenAwake: screen,
+                                  lidAwake: lidAwake, releaseWhenWorkEnds: release)
+    }
+
+    @Test("il caso per cui esiste: coperchio chiuso, lavoro finito, NoSleep spento")
+    func theCase() { #expect(d() == true) }
+
+    @Test("a coperchio ALZATO non si addormenta mai (polo negativo, il più importante)")
+    func neverWithLidOpen() { #expect(d(lid: false) == false) }
+
+    @Test("se nel frattempo è ripartito un lavoro, si annulla")
+    func workRestarted() { #expect(d(leases: 1) == false) }
+
+    @Test("se qualcuno ha riacceso NoSleep durante l'attesa, si annulla")
+    func rearmed() {
+        #expect(d(screen: true) == false)
+        #expect(d(lidAwake: true) == false)
+    }
+
+    @Test("se l'interruttore è stato spento durante l'attesa, la decisione decade")
+    func toggleTurnedOff() { #expect(d(release: false) == false) }
+
+    @Test("l'attesa è di trenta secondi, non zero")
+    func graceIsReal() { #expect(SleepDecision.grace >= 20) }
+}
+
+@Suite("Politica — la soglia di batteria")
+struct PolicyBatteryTests {
+
+    private let acceso = Config(screenAwake: true, lidAwake: true)
+
+    @Test("sotto la soglia, a batteria: molla tutto")
+    func belowFloor() {
+        let out = Policy.apply(.battery(percent: 18, onAC: false), to: acceso)
+        #expect(out.config.screenAwake == false)
+        #expect(out.config.lidAwake == false)
+        #expect(out.note?.contains("18%") == true)
+    }
+
+    @Test("esattamente alla soglia molla: 20 vuol dire «da 20 in giù»")
+    func atFloor() { #expect(Policy.apply(.battery(percent: 20, onAC: false), to: acceso).changed) }
+
+    @Test("sopra la soglia non tocca niente (polo negativo)")
+    func aboveFloor() {
+        #expect(Policy.apply(.battery(percent: 21, onAC: false), to: acceso).changed == false)
+    }
+
+    @Test("a CORRENTE la soglia non si applica mai: la carica sale, non scende")
+    func neverOnAC() {
+        #expect(Policy.apply(.battery(percent: 5, onAC: true), to: acceso).changed == false)
+    }
+
+    @Test("con l'interruttore spento non molla nemmeno al 3%")
+    func disabled() {
+        var c = acceso; c.batteryFloorOn = false
+        #expect(Policy.apply(.battery(percent: 3, onAC: false), to: c).changed == false)
+    }
+
+    @Test("su una macchina senza batteria non succede niente")
+    func noBattery() {
+        #expect(Policy.apply(.battery(percent: nil, onAC: false), to: acceso).changed == false)
+    }
+
+    @Test("la soglia nasce a 20 ed è modificabile fra cinque valori")
+    func birthValue() {
+        #expect(Config.atBirth.batteryFloor == 20)
+        #expect(Config.atBirth.batteryFloorOn == true)
+        #expect(Config.batteryFloorChoices.contains(20))
+    }
+}
+
+/// Il coperchio che segue «tieni sveglio» (2026-08-11, sua richiesta).
+///
+/// **Perché la regola prepara invece di reagire.** Abbassato il coperchio, macOS addormenta il Mac
+/// in una frazione di secondo, mentre il giro dell'app passa ogni cinque: accorgersene dopo vuol
+/// dire accorgersene da spenti. L'unico istante utile è prima, quindi il coperchio si arma insieme
+/// a «tieni sveglio».
+@Suite("Il coperchio che segue")
+struct LidFollowTests {
+
+    private var conRegola: Config {
+        var c = Config.atBirth
+        c.lidFollowsAwake = true
+        return c
+    }
+
+    @Test("acceso «tieni sveglio», il coperchio si arma")
+    func armsOnEdge() {
+        var c = conRegola; c.screenAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: false, armed: false, helperInstalled: true)
+        #expect(e.config.lidAwake)
+        #expect(e.armed)
+        #expect(e.note == S.lidArmed)
+    }
+
+    @Test("senza la regola non si arma niente (polo negativo)")
+    func neverWithoutTheSwitch() {
+        var c = Config.atBirth; c.screenAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: false, armed: false, helperInstalled: true)
+        #expect(e.config.lidAwake == false)
+        #expect(e.changed == false)
+    }
+
+    @Test("senza il permesso di amministratore non si arma, e non si scrive niente")
+    func needsHelper() {
+        var c = conRegola; c.screenAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: false, armed: false, helperInstalled: false)
+        #expect(e.config.lidAwake == false)
+        #expect(e.changed == false)
+    }
+
+    /// Il cuore della regola: **fronte, non stato**. Senza questo, il coperchio spento a mano
+    /// tornerebbe acceso mezzo secondo dopo, e l'app combatterebbe contro il dito di chi la usa.
+    @Test("spento a mano mentre «tieni sveglio» è acceso, NON si riarma")
+    func doesNotFightTheHand() {
+        var c = conRegola; c.screenAwake = true; c.lidAwake = false
+        let e = Policy.lidFollow(config: c, screenAwakeWas: true, armed: false, helperInstalled: true)
+        #expect(e.config.lidAwake == false)
+        #expect(e.changed == false)
+    }
+
+    @Test("spento «tieni sveglio», il coperchio armato da noi si molla")
+    func disarmsWithAwake() {
+        var c = conRegola; c.screenAwake = false; c.lidAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: true, armed: true, helperInstalled: true)
+        #expect(e.config.lidAwake == false)
+        #expect(e.armed == false)
+        #expect(e.note == S.lidDisarmed)
+    }
+
+    @Test("un coperchio acceso A MANO non si spegne quando «tieni sveglio» si spegne")
+    func leavesTheHandAlone() {
+        var c = conRegola; c.screenAwake = false; c.lidAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: true, armed: false, helperInstalled: true)
+        #expect(e.config.lidAwake)
+        #expect(e.changed == false)
+    }
+
+    @Test("spenta la regola, quello che aveva armato lei si molla")
+    func disarmsWhenSwitchedOff() {
+        var c = Config.atBirth; c.screenAwake = true; c.lidAwake = true
+        let e = Policy.lidFollow(config: c, screenAwakeWas: true, armed: true, helperInstalled: true)
+        #expect(e.config.lidAwake == false)
+        #expect(e.armed == false)
+    }
+
+    /// Le reti di sicurezza restano sopra a tutto: se il termico ha già mollato il coperchio, la
+    /// memoria si azzera invece di restare a dire che lì c'è ancora qualcosa di nostro.
+    @Test("se il coperchio è già caduto per altra via, la memoria si azzera")
+    func forgetsWhatIsGone() {
+        var c = conRegola; c.screenAwake = true; c.lidAwake = false
+        let e = Policy.lidFollow(config: c, screenAwakeWas: true, armed: true, helperInstalled: true)
+        #expect(e.armed == false)
+        #expect(e.changed == false)
+    }
+
+    @Test("nasce spento: il coperchio ha un costo fisico e non si arma senza che l'abbia chiesto")
+    func bornOff() {
+        #expect(Config.atBirth.lidFollowsAwake == false)
+    }
+
+    @Test("il termico molla tutto anche col coperchio armato: le reti restano sopra")
+    func thermalStillWins() {
+        var c = conRegola; c.screenAwake = true; c.lidAwake = true
+        let e = Policy.apply(.thermal(.serious), to: c)
+        #expect(e.config.screenAwake == false)
+        #expect(e.config.lidAwake == false)
+    }
+}

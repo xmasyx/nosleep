@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+dist/
+*.icns
+*.profraw
+.DS_Store
+
+# Lavoro interno: sta sul disco, non nel repo pubblico
+ISA.md
+Scripts/prova-wifi.sh
+docs/prova-wifi-*.jsonl
+docs/hero-source.png
+Debug/
