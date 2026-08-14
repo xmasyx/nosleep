@@ -25,7 +25,7 @@ X2=$((S - INSET))
 magick -size ${S}x${S} xc:black -font "$FONT" -weight 700 \
   -fill white -gravity center \
   -pointsize 200 -kerning 9 -annotate +0-132 "NO" \
-  -pointsize 140 -kerning 5 -annotate +0+170 "SLEEP" "$T/t.png"
+  -pointsize 200 -kerning 9 -annotate +0+170 "SLEEP" "$T/t.png"
 
 # --- i tre canali non si sovrappongono ----------------------------------------
 magick "$T/t.png" -colorspace gray -roll +7+0 "$T/r.png"
