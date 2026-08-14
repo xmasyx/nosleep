@@ -36,6 +36,26 @@ $ nosleep hold --id sync   --ttl 600  --label "photo sync"
 Sleep is the default here. Staying awake is a claim, claims are counted, and every
 claim expires.
 
+## Install
+
+There is no packaged release yet, so you build it. One command does all of it:
+
+```sh
+git clone https://github.com/xmasyx/nosleep.git
+cd nosleep
+Scripts/build-app.sh
+```
+
+That compiles, signs, installs **NoSleep.app** into `/Applications`, and puts the
+`nosleep` command in `~/.local/bin` — add that to your `PATH` if it isn't there
+already. You need **macOS 15 or later** and the Xcode command line tools; run
+`xcode-select --install` first if `swift --version` comes back empty.
+
+Nothing asks for `sudo` while installing. The first time you switch on "work with
+the lid closed", the app asks for your admin password once, and that installs the
+small root watchdog described below: the thing that puts sleep back the way it
+found it if the app ever dies. Everything else runs as you.
+
 ## Claims, and why they always expire
 
 Anything can take one. A shell script, a Makefile, a cron job, your editor's build
