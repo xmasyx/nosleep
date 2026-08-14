@@ -24,8 +24,8 @@ X2=$((S - INSET))
 # metà, e le due righe tornano incolonnate.
 magick -size ${S}x${S} xc:black -font "$FONT" -weight 700 \
   -fill white -gravity center \
-  -pointsize 208 -kerning 9 -annotate +0+62 "NO" \
-  -pointsize 143 -kerning 5 -annotate +0+207 "SLEEP" "$T/t.png"
+  -pointsize 200 -kerning 9 -annotate +0-132 "NO" \
+  -pointsize 140 -kerning 5 -annotate +0+170 "SLEEP" "$T/t.png"
 
 # --- i tre canali non si sovrappongono ----------------------------------------
 magick "$T/t.png" -colorspace gray -roll +7+0 "$T/r.png"
@@ -50,7 +50,7 @@ magick "$T/halo.png" "$T/core.png" -compose screen -composite \
   "$T/star.png" -compose screen -composite "$T/flare.png"
 
 magick -size ${S}x${S} xc:black \
-  \( "$T/flare.png" -geometry +252+100 \) -compose screen -composite \
+  \( "$T/flare.png" -geometry +252+272 \) -compose screen -composite \
   \( "$T/text-glow.png" \) -compose screen -composite "$T/stage.png"
 
 # --- scanline, grana, e la maschera del vetro ---------------------------------
