@@ -65,16 +65,24 @@ final class AppModel: ObservableObject {
     /// stare il Mac — arriva quando vuole lei, magari venti minuti dopo. L'attesa vive qui e viene
     /// rivalutata dal giro da cinque secondi, come tutto il resto.
     private var pendingSleepSince: Double?
+    /// Quando il Mac si è svegliato l'ultima volta. Non è un seam per i banchi: è un fatto che
+    /// serve alla decisione, e i banchi lo scrivono perché è lo stesso fatto.
+    var lastWake: Double?
     /// Che cosa fare per addormentare, e quanto aspettare. Iniettabili per i banchi: un banco che
     /// per provarsi deve addormentare davvero il Mac non lo lancia nessuno, quindi non proverebbe
     /// niente.
-    var sleepAction: () -> Void = {
+    /// Torna `false` se il comando non è nemmeno partito o è uscito male. **Guardare com'è andata
+    /// non è pignoleria:** senza, un rifiuto del sistema lascerebbe il registro con scritto «mando
+    /// il Mac in sleep» e il Mac sveglio, cioè la riga che fa dubitare di tutto il file.
+    var sleepAction: () -> Bool = {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
         p.arguments = ["sleepnow"]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
-        try? p.run()
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
     }
     /// La grazia è iniettabile perché i banchi la abbassano davvero. L'inattività no: quella si
     /// finge da `PowerAssertion.idleOverride`, che è dove i banchi già la fingono, e un secondo
@@ -109,6 +117,11 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.tick() }
         }
         observePowerSource()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.lastWake = Date().timeIntervalSince1970 }
+        }
     }
 
     /// Attaccare o staccare l'alimentatore deve cambiare il pannello **subito**.
@@ -204,6 +217,8 @@ final class AppModel: ObservableObject {
     private func evaluatePendingSleep(now: Double, leases count: Int) {
         guard let since = pendingSleepSince else { return }
         let idle = PowerAssertion.userIdleSeconds()
+        // Mai svegliato in questa vita dell'app: allora nessun risveglio recente da rispettare.
+        let dalRisveglio = lastWake.map { now - $0 } ?? .infinity
         let verdetto = SleepDecision.verdict(lidClosed: PowerAssertion.isClamshellClosed(),
                                              leases: count,
                                              screenAwake: config.screenAwake,
@@ -211,6 +226,8 @@ final class AppModel: ObservableObject {
                                              releaseWhenWorkEnds: config.releaseWhenWorkEnds,
                                              pendingFor: max(0, now - since),
                                              userIdle: idle,
+                                             audioPlaying: Audio.isPlaying(),
+                                             sinceWake: dalRisveglio,
                                              grace: grace)
         switch verdetto {
         case .wait:
@@ -222,7 +239,7 @@ final class AppModel: ObservableObject {
         case .sleepNow:
             pendingSleepSince = nil
             record(S.logSleepNow)
-            sleepAction()
+            if !sleepAction() { record(S.logSleepFailed) }
         }
     }
 

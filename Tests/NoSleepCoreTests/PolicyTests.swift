@@ -228,10 +228,12 @@ struct SleepDecisionTests {
     /// ogni prova che non parla di lui alla tastiera misura la condizione che dichiara.
     private func d(lid: Bool = true, leases: Int = 0, screen: Bool = false,
                    lidAwake: Bool = false, release: Bool = true,
-                   idle: Double = .infinity) -> Bool {
+                   idle: Double = .infinity, audio: Bool = false,
+                   sinceWake: Double = .infinity) -> Bool {
         SleepDecision.verdict(lidClosed: lid, leases: leases, screenAwake: screen,
                               lidAwake: lidAwake, releaseWhenWorkEnds: release,
-                              pendingFor: SleepDecision.grace, userIdle: idle) == .sleepNow
+                              pendingFor: SleepDecision.grace, userIdle: idle,
+                              audioPlaying: audio, sinceWake: sinceWake) == .sleepNow
     }
 
     @Test("il caso per cui esiste: coperchio chiuso, lavoro finito, NoSleep spento")
@@ -250,6 +252,20 @@ struct SleepDecisionTests {
 
     @Test("a coperchio chiuso l'inattività non c'entra: il gesto ha già parlato")
     func lidClosedIgnoresIdle() { #expect(d(lid: true, idle: 0) == true) }
+
+    @Test("a coperchio alzato non si interrompe quello che sta suonando")
+    func neverDuringPlayback() { #expect(d(lid: false, audio: true) == false) }
+
+    @Test("a coperchio alzato non si riaddormenta un Mac appena svegliato")
+    func neverRightAfterWake() {
+        #expect(d(lid: false, sinceWake: SleepDecision.wakeGuard - 1) == false)
+        #expect(d(lid: false, sinceWake: SleepDecision.wakeGuard) == true)
+    }
+
+    @Test("a coperchio chiuso i due veti non valgono: era il caso di coreaudiod")
+    func lidClosedIgnoresVetoes() {
+        #expect(d(lid: true, idle: 0, audio: true, sinceWake: 0) == true)
+    }
 
     @Test("se nel frattempo è ripartito un lavoro, si annulla")
     func workRestarted() { #expect(d(leases: 1) == false) }
@@ -272,7 +288,8 @@ struct SleepDecisionTests {
     private func v(pendingFor: Double, idle: Double = .infinity,
                    lid: Bool = false) -> SleepDecision.Verdict {
         SleepDecision.verdict(lidClosed: lid, leases: 0, screenAwake: false, lidAwake: false,
-                              releaseWhenWorkEnds: true, pendingFor: pendingFor, userIdle: idle)
+                              releaseWhenWorkEnds: true, pendingFor: pendingFor, userIdle: idle,
+                              audioPlaying: false, sinceWake: .infinity)
     }
 
     @Test("prima del respiro si aspetta, anche se tutto il resto è a posto")

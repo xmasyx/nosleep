@@ -339,14 +339,15 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         // confronta con `ioreg -c IOHIDSystem | grep HIDIdleTime`, che è la stessa proprietà.
         print(String(format: "  inattività letta dal sistema: %.1f s", PowerAssertion.userIdleSeconds()))
         var chiamate = 0
-        func nuovo(lidClosed: Bool, idle: Double) -> AppModel {
+        func nuovo(lidClosed: Bool, idle: Double, audio: Bool = false) -> AppModel {
             PowerAssertion.clamshellOverride = lidClosed
             PowerAssertion.idleOverride = idle
+            Audio.override = audio
             let m = AppModel()
             // Niente respiro: qui si misura **quale porta si apre**, non l'attesa, che ha il suo
             // polo apposta più sotto.
             m.grace = 0
-            m.sleepAction = { chiamate += 1 }
+            m.sleepAction = { chiamate += 1; return true }
             // Il rilascio a fine lavoro scatta solo se c'era qualcosa da rilasciare: senza questo
             // il banco misurava un non-evento e sembrava un difetto dell'app.
             // Stessa ragione del banco termico: qui si prova l'addormentamento, non le reti.
@@ -402,7 +403,34 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         guard chiamate == 0 else { print("✗ ha addormentato con «tieni sveglio» riacceso"); exit(1) }
         print("  riacceso in attesa   → annulla          (nessuno dorme sotto una presa viva)")
 
-        // 6. Il respiro esiste: con la grazia vera, il primo giro non addormenta nessuno.
+        // 6. **Il film.** Coperchio alzato, lui fermo da un pezzo, ma qualcosa sta suonando: si
+        //    aspetta. Il veto guarda il dispositivo audio e non le asserzioni sul display, perché
+        //    quelle le tiene aperte anche un'app in secondo piano — WhatsApp da sei ore sul suo Mac,
+        //    Chrome per sua esperienza — e con quel veto il sonno imposto non sarebbe mai scattato.
+        chiamate = 0
+        fineLavoro(nuovo(lidClosed: false, idle: SleepDecision.idleThreshold + 60, audio: true))
+        guard chiamate == 0 else { print("✗ ha addormentato il Mac mentre qualcosa stava suonando"); exit(1) }
+        print("  alzato, sta suonando → aspetta          (il film non si interrompe)")
+
+        // 7. **Il risveglio.** Riaperto il coperchio, il contatore di inattività può essere ancora
+        //    alto: per un minuto non si impone niente.
+        chiamate = 0
+        let svegliato = nuovo(lidClosed: false, idle: SleepDecision.idleThreshold + 600)
+        svegliato.lastWake = Date().timeIntervalSince1970
+        fineLavoro(svegliato)
+        guard chiamate == 0 else { print("✗ ha riaddormentato il Mac appena sveglio"); exit(1) }
+        print("  appena svegliato     → aspetta          (un minuto di franchigia)")
+
+        // 8. A coperchio CHIUSO i due veti non valgono: chi l'ha abbassato ha già parlato, e il caso
+        //    che ha fatto nascere l'app era proprio un processo audio che teneva sveglio il Mac.
+        chiamate = 0
+        let chiusoConAudio = nuovo(lidClosed: true, idle: 0, audio: true)
+        chiusoConAudio.lastWake = Date().timeIntervalSince1970
+        fineLavoro(chiusoConAudio)
+        guard chiamate == 1 else { print("✗ a coperchio chiuso i veti hanno fermato il sonno (\(chiamate))"); exit(1) }
+        print("  chiuso, sta suonando → addormenta       (il caso di coreaudiod)")
+
+        // 9. Il respiro esiste: con la grazia vera, il primo giro non addormenta nessuno.
         chiamate = 0
         let subito = nuovo(lidClosed: true, idle: 0)
         subito.grace = SleepDecision.grace
@@ -411,6 +439,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         print("  primo giro           → aspetta          (il respiro è vero)")
 
         PowerAssertion.idleOverride = nil
+        Audio.override = nil
         print("✓ addormenta a coperchio chiuso, e da alzato solo quando lui ha lasciato stare il Mac")
         exit(0)
     }

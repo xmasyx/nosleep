@@ -29,6 +29,16 @@ public enum SleepDecision {
     /// «non c'è nessuno». Cinque minuti, sua scelta del 2026-08-19.
     public static let idleThreshold: Double = 300
 
+    /// Quanto deve essere passato da un risveglio perché il sonno si possa imporre di nuovo.
+    ///
+    /// **Il caso, trovato a tavolino il 19/08 e non ancora visto sul suo Mac:** il Mac dorme per un
+    /// motivo suo mentre una prenotazione è viva, quella scade nel sonno, lui riapre il coperchio e
+    /// l'app vede il lavoro finire **in quell'istante**. Se aprire il coperchio non azzera il
+    /// contatore di inattività, mezzo minuto dopo il Mac tornerebbe a dormire in faccia a chi l'ha
+    /// appena aperto. Non ho verificato quell'anello, e un minuto di franchigia lo rende
+    /// irrilevante invece di appoggiarsi a una supposizione.
+    public static let wakeGuard: Double = 60
+
     /// Quanto può restare armata un'attesa che non trova mai il suo momento.
     ///
     /// Senza questo tetto, un lavoro finito alle sette di sera addormenterebbe il Mac alle due di
@@ -56,7 +66,11 @@ public enum SleepDecision {
     ///   presa mezzo minuto fa non vale più.
     /// - `pendingFor >= grace`: il respiro.
     /// - e infine una porta sola fra le due: coperchio abbassato, oppure nessuno alla tastiera da
-    ///   `idleThreshold`.
+    ///   `idleThreshold` **e** niente che stia suonando **e** nessun risveglio appena avvenuto.
+    ///
+    /// I due veti valgono solo sulla porta dell'inattività, e non su quella del coperchio: chi
+    /// abbassa il coperchio ha già detto quello che voleva, e il caso che ha fatto nascere tutto
+    /// era proprio un processo audio che teneva sveglio il Mac chiuso per nove ore.
     ///
     /// **Le condizioni si rileggono a ogni giro, non si ricordano**: in mezzo minuto il coperchio
     /// può essersi riaperto, un lavoro può essere ripartito, lui può aver riacceso tutto.
@@ -70,10 +84,14 @@ public enum SleepDecision {
                                releaseWhenWorkEnds: Bool,
                                pendingFor: Double,
                                userIdle: Double,
+                               audioPlaying: Bool,
+                               sinceWake: Double,
                                grace: Double = SleepDecision.grace) -> Verdict {
         guard leases == 0, !screenAwake, !lidAwake, releaseWhenWorkEnds else { return .cancel }
         guard pendingFor <= pendingMaxAge else { return .cancel }
         guard pendingFor >= grace else { return .wait }
-        return (lidClosed || userIdle >= idleThreshold) ? .sleepNow : .wait
+        if lidClosed { return .sleepNow }
+        guard userIdle >= idleThreshold, !audioPlaying, sinceWake >= wakeGuard else { return .wait }
+        return .sleepNow
     }
 }

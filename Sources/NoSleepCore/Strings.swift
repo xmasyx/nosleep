@@ -107,6 +107,7 @@ public enum S {
     public static let logSleepPendingIdle = "sleep in attesa, lavoro finito e coperchio alzato"
     public static let logSleepCancelled = "sleep annullato, le condizioni sono cambiate"
     public static let logSleepNow = "mando il Mac in sleep"
+    public static let logSleepFailed = "il sistema ha rifiutato di andare in sleep"
     public static func sleepScheduled(_ s: Int) -> String { "va in sleep fra \(s) secondi" }
     public static func sleepWhenIdle(_ min: Int) -> String {
         "va in sleep quando lasci il Mac fermo \(min) minuti"
