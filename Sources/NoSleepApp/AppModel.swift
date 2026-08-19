@@ -60,8 +60,11 @@ final class AppModel: ObservableObject {
     private let leases = LeaseStore(directory: Paths.leases())
     private var timer: Timer?
     private var previousLeaseCount = 0
-    /// L'attesa prima di addormentare, se ce n'è una in corso.
-    private var sleepTimer: Timer?
+    /// Quando è stata armata l'attesa di addormentare, se ce n'è una. **Non è un timer**: un timer
+    /// decide una volta sola e a coperchio alzato la condizione che conta — che lui abbia lasciato
+    /// stare il Mac — arriva quando vuole lei, magari venti minuti dopo. L'attesa vive qui e viene
+    /// rivalutata dal giro da cinque secondi, come tutto il resto.
+    private var pendingSleepSince: Double?
     /// Che cosa fare per addormentare, e quanto aspettare. Iniettabili per i banchi: un banco che
     /// per provarsi deve addormentare davvero il Mac non lo lancia nessuno, quindi non proverebbe
     /// niente.
@@ -74,6 +77,11 @@ final class AppModel: ObservableObject {
         try? p.run()
     }
     var grace: Double = SleepDecision.grace
+    /// Da quanto tempo nessuno tocca il Mac. Iniettabile per la stessa ragione del termico: un
+    /// banco che per provarsi deve stare fermo cinque minuti non lo lancia nessuno.
+    var userIdleSource: () -> Double = { PowerAssertion.userIdleSeconds() }
+    /// La soglia di inattività, sfilabile solo dai banchi.
+    var idleThreshold: Double = SleepDecision.idleThreshold
     /// Da dove viene la lettura dei gradi. Iniettabile per la stessa ragione di `thermalSource`:
     /// un banco che vuole provare UNA regola deve poter mettere a tacere le altre.
     var temperatureSource: () -> Thermometer.Reading = { Thermometer.read() }
@@ -151,18 +159,16 @@ final class AppModel: ObservableObject {
 
         // Il termico vince su tutto, e va valutato per primo: se il Mac scotta, il fatto che sia
         // appena partito un lavoro non deve poter riaccendere niente nello stesso giro.
-        if sleepTimer != nil, count > 0 || !PowerAssertion.isClamshellClosed() {
-            sleepTimer?.invalidate(); sleepTimer = nil
-            record(S.logSleepCancelled)
-            lastNote = nil
-        }
-
         apply(.thermal(level))
         apply(.battery(percent: batteryPercent, onAC: onAC))
         if count != previousLeaseCount {
             apply(.leases(from: previousLeaseCount, to: count))
             previousLeaseCount = count
         }
+
+        // Dopo la politica, non prima: l'attesa deve vedere la configurazione di adesso, compreso
+        // un «tieni sveglio» appena riacceso da un lavoro nuovo.
+        evaluatePendingSleep(now: now, leases: count)
 
         refresh()
     }
@@ -177,39 +183,50 @@ final class AppModel: ObservableObject {
 
         // Se a mollare la presa è stata la **fine del lavoro** e il coperchio è abbassato, mollare
         // non basta: qualcun altro può tenere sveglio il Mac per ore mentre lui non può vederlo.
-        if outcome.note == S.releasedWorkDone { scheduleSleepIfLidClosed() }
+        if outcome.note == S.releasedWorkDone { armPendingSleep() }
     }
 
     // ── Addormentare davvero ─────────────────────────────────────────────────
 
-    private func scheduleSleepIfLidClosed() {
-        guard PowerAssertion.isClamshellClosed() else { return }
-        sleepTimer?.invalidate()
-        lastNote = S.sleepScheduled(Int(grace))
-        record(S.logSleepScheduled)
-        sleepTimer = Timer.scheduledTimer(withTimeInterval: grace, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.sleepNowIfStillRight() }
+    /// Arma l'attesa. Da qui in poi decide `evaluatePendingSleep`, giro per giro.
+    private func armPendingSleep() {
+        pendingSleepSince = Date().timeIntervalSince1970
+        let chiuso = PowerAssertion.isClamshellClosed()
+        lastNote = chiuso ? S.sleepScheduled(Int(grace)) : S.sleepWhenIdle(Int(idleThreshold / 60))
+        record(chiuso ? S.logSleepScheduled : S.logSleepPendingIdle)
+    }
+
+    /// Il verdetto, a ogni giro, sulle condizioni di **adesso**.
+    ///
+    /// A coperchio alzato la porta è l'inattività, e l'inattività non ha un'ora: per questo l'attesa
+    /// non può essere un timer che decide una volta sola. Lui finisce il lavoro, continua a
+    /// scrivere, e mezz'ora dopo si alza: è quello il momento, e nessun timer armato prima lo sa.
+    private func evaluatePendingSleep(now: Double, leases count: Int) {
+        guard let since = pendingSleepSince else { return }
+        let idle = userIdleSource()
+        let verdetto = SleepDecision.verdict(lidClosed: PowerAssertion.isClamshellClosed(),
+                                             leases: count,
+                                             screenAwake: config.screenAwake,
+                                             lidAwake: config.lidAwake,
+                                             releaseWhenWorkEnds: config.releaseWhenWorkEnds,
+                                             pendingFor: max(0, now - since),
+                                             userIdle: idle,
+                                             grace: grace,
+                                             idleThreshold: idleThreshold)
+        switch verdetto {
+        case .wait:
+            return
+        case .cancel:
+            pendingSleepSince = nil
+            record(S.logSleepCancelled)
+            lastNote = nil
+        case .sleepNow:
+            pendingSleepSince = nil
+            record(S.logSleepNow)
+            sleepAction()
         }
     }
 
-    /// Le condizioni si **rileggono** allo scadere, non si ricordano: in trenta secondi il coperchio
-    /// può essersi riaperto, un lavoro può essere ripartito, lui può aver riacceso tutto. Decidere
-    /// adesso su una fotografia di mezzo minuto fa è il modo di addormentare un Mac che sta lavorando.
-    private func sleepNowIfStillRight() {
-        sleepTimer = nil
-        let now = Date().timeIntervalSince1970
-        guard SleepDecision.shouldSleep(lidClosed: PowerAssertion.isClamshellClosed(),
-                                        leases: leases.count(now: now),
-                                        screenAwake: config.screenAwake,
-                                        lidAwake: config.lidAwake,
-                                        releaseWhenWorkEnds: config.releaseWhenWorkEnds) else {
-            record(S.logSleepCancelled)
-            lastNote = nil
-            return
-        }
-        record(S.logSleepNow)
-        sleepAction()
-    }
 
     // ── Il coperchio che segue ───────────────────────────────────────────────
 

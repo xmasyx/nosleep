@@ -334,11 +334,18 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
     /// Il banco dell'addormentamento, **end-to-end**: non che la decisione sia giusta, che l'app
     /// arrivi davvero a chiamare il comando, e che lo annulli quando deve.
     @MainActor static func checkSleep() -> Never {
+        // **Prima dei poli finti, la lettura vera.** Tutto il banco gira su un'inattività iniettata,
+        // e un banco tutto iniettato non prova mai che la sonda sappia leggere il mondo: si
+        // confronta con `ioreg -c IOHIDSystem | grep HIDIdleTime`, che è la stessa proprietà.
+        print(String(format: "  inattività letta dal sistema: %.1f s", PowerAssertion.userIdleSeconds()))
         var chiamate = 0
-        func nuovo(lidClosed: Bool) -> AppModel {
+        func nuovo(lidClosed: Bool, idle: Double) -> AppModel {
             PowerAssertion.clamshellOverride = lidClosed
+            PowerAssertion.idleOverride = idle
             let m = AppModel()
-            m.grace = 0.4
+            // Niente respiro: qui si misura **quale porta si apre**, non l'attesa, che ha il suo
+            // polo apposta più sotto.
+            m.grace = 0
             m.sleepAction = { chiamate += 1 }
             // Il rilascio a fine lavoro scatta solo se c'era qualcosa da rilasciare: senza questo
             // il banco misurava un non-evento e sembrava un difetto dell'app.
@@ -348,32 +355,60 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             m.setScreenAwake(true)
             return m
         }
+        func fineLavoro(_ m: AppModel, giri: Int = 2) {
+            m.simulateWorkEnded()
+            for _ in 0..<giri { m.tickNow() }
+        }
 
-        // 1. Coperchio ALZATO: non deve nemmeno programmarlo. È il polo negativo che conta.
-        let aperto = nuovo(lidClosed: false)
-        aperto.simulateWorkEnded()
-        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
-        guard chiamate == 0 else { print("✗ ha addormentato a coperchio alzato"); exit(1) }
-        print("  coperchio alzato   → non addormenta   (polo negativo)")
-
-        // 2. Coperchio chiuso e lavoro finito: deve arrivare al comando.
+        // 1. Coperchio ALZATO con lui alla tastiera: **il polo negativo che conta più di tutti**.
+        //    Un Mac che si addormenta in faccia a chi lo sta leggendo è il difetto che farebbe
+        //    disinstallare l'app.
         chiamate = 0
-        let chiuso = nuovo(lidClosed: true)
-        chiuso.simulateWorkEnded()
-        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+        fineLavoro(nuovo(lidClosed: false, idle: 5))
+        guard chiamate == 0 else { print("✗ ha addormentato mentre lui stava usando il Mac"); exit(1) }
+        print("  alzato, lui c'è      → non addormenta   (polo negativo)")
+
+        // 2. Coperchio alzato e nessuno alla tastiera da più di cinque minuti: la porta nuova del
+        //    19/08.
+        chiamate = 0
+        fineLavoro(nuovo(lidClosed: false, idle: SleepDecision.idleThreshold + 10))
+        guard chiamate == 1 else { print("✗ alzato e fermo da 5 minuti: non ha addormentato (\(chiamate))"); exit(1) }
+        print("  alzato, fermo da 5\'  → addormenta       (polo positivo)")
+
+        // 3. Coperchio chiuso: la porta di sempre, che l'inattività non deve aver rotto.
+        chiamate = 0
+        fineLavoro(nuovo(lidClosed: true, idle: 0))
         guard chiamate == 1 else { print("✗ a coperchio chiuso non ha addormentato (\(chiamate))"); exit(1) }
-        print("  coperchio chiuso   → addormenta       (polo positivo)")
+        print("  chiuso               → addormenta       (era già così)")
 
-        // 3. Coperchio riaperto durante l'attesa: deve annullare.
+        // 4. Coperchio riaperto durante l'attesa, con lui che torna: deve annullare.
         chiamate = 0
-        let riaperto = nuovo(lidClosed: true)
+        let riaperto = nuovo(lidClosed: true, idle: 0)
         riaperto.simulateWorkEnded()
         PowerAssertion.clamshellOverride = false
-        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+        riaperto.tickNow(); riaperto.tickNow()
         guard chiamate == 0 else { print("✗ ha addormentato dopo che il coperchio si era riaperto"); exit(1) }
-        print("  riaperto in attesa → annulla          (le condizioni si rileggono)")
+        print("  riaperto in attesa   → annulla          (le condizioni si rileggono)")
 
-        print("✓ addormenta solo a coperchio chiuso, e cambia idea se cambiano le condizioni")
+        // 5. NoSleep riacceso durante l'attesa: l'attesa decade, e non riparte da sola.
+        chiamate = 0
+        let riacceso = nuovo(lidClosed: false, idle: SleepDecision.idleThreshold + 10)
+        riacceso.simulateWorkEnded()
+        riacceso.setScreenAwake(true)
+        riacceso.tickNow(); riacceso.tickNow()
+        guard chiamate == 0 else { print("✗ ha addormentato con «tieni sveglio» riacceso"); exit(1) }
+        print("  riacceso in attesa   → annulla          (nessuno dorme sotto una presa viva)")
+
+        // 6. Il respiro esiste: con la grazia vera, il primo giro non addormenta nessuno.
+        chiamate = 0
+        let subito = nuovo(lidClosed: true, idle: 0)
+        subito.grace = SleepDecision.grace
+        fineLavoro(subito)
+        guard chiamate == 0 else { print("✗ ha addormentato prima dei \(Int(SleepDecision.grace)) secondi di respiro"); exit(1) }
+        print("  primo giro           → aspetta          (il respiro è vero)")
+
+        PowerAssertion.idleOverride = nil
+        print("✓ addormenta a coperchio chiuso, e da alzato solo quando lui ha lasciato stare il Mac")
         exit(0)
     }
 

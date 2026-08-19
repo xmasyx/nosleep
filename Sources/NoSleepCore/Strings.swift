@@ -63,8 +63,11 @@ public enum S {
         "Serve la password di amministratore, una volta sola. Accendi «Lavora a coperchio chiuso» e poi torna qui."
 
     public static let releaseTitle = "Disattiva quando il lavoro finisce"
+    /// Dice che cosa succede al Mac, e dice **quando**: con il coperchio alzato il momento non è la
+    /// fine del lavoro, è quando lui smette di toccarlo. Scritto male, questa riga sarebbe la
+    /// promessa che l'app non mantiene.
     public static let releaseNote =
-        "Quando l'ultima sessione termina il compito, il Mac può tornare in sleep."
+        "Finito l'ultimo lavoro il Mac torna a dormire: subito se il coperchio è abbassato, dopo cinque minuti che lo lasci stare se è alzato."
 
     // ── Piede ────────────────────────────────────────────────────────────────
 
@@ -101,9 +104,13 @@ public enum S {
     }
     public static let logQuit = "chiusura, disattivato tutto"
     public static let logSleepScheduled = "sleep programmato, coperchio chiuso e lavoro finito"
+    public static let logSleepPendingIdle = "sleep in attesa, lavoro finito e coperchio alzato"
     public static let logSleepCancelled = "sleep annullato, le condizioni sono cambiate"
     public static let logSleepNow = "mando il Mac in sleep"
     public static func sleepScheduled(_ s: Int) -> String { "va in sleep fra \(s) secondi" }
+    public static func sleepWhenIdle(_ min: Int) -> String {
+        "va in sleep quando lasci il Mac fermo \(min) minuti"
+    }
     public static func logMode(_ m: String) -> String { "modalità cambiata in \(m)" }
 
     public static let installCancelled =

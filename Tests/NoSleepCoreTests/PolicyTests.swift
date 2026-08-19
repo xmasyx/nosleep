@@ -221,17 +221,32 @@ struct PolicyTemperatureTests {
 @Suite("Addormentare davvero, non solo mollare la presa")
 struct SleepDecisionTests {
 
+    /// L'inattività non passata vale «da sempre fermo»: così ogni prova che non parla di lui alla
+    /// tastiera continua a misurare la condizione che dichiara di misurare.
     private func d(lid: Bool = true, leases: Int = 0, screen: Bool = false,
-                   lidAwake: Bool = false, release: Bool = true) -> Bool {
+                   lidAwake: Bool = false, release: Bool = true,
+                   idle: Double = .infinity) -> Bool {
         SleepDecision.shouldSleep(lidClosed: lid, leases: leases, screenAwake: screen,
-                                  lidAwake: lidAwake, releaseWhenWorkEnds: release)
+                                  lidAwake: lidAwake, releaseWhenWorkEnds: release,
+                                  userIdle: idle)
     }
 
     @Test("il caso per cui esiste: coperchio chiuso, lavoro finito, NoSleep spento")
     func theCase() { #expect(d() == true) }
 
-    @Test("a coperchio ALZATO non si addormenta mai (polo negativo, il più importante)")
-    func neverWithLidOpen() { #expect(d(lid: false) == false) }
+    @Test("a coperchio alzato con lui alla tastiera non si addormenta mai (il polo che conta)")
+    func neverUnderHisHands() {
+        #expect(d(lid: false, idle: 0) == false)
+        #expect(d(lid: false, idle: SleepDecision.idleThreshold - 1) == false)
+    }
+
+    @Test("a coperchio alzato e Mac lasciato stare, si addormenta (sua scelta, 19/08)")
+    func lidOpenButNobodyThere() {
+        #expect(d(lid: false, idle: SleepDecision.idleThreshold) == true)
+    }
+
+    @Test("a coperchio chiuso l'inattività non c'entra: il gesto ha già parlato")
+    func lidClosedIgnoresIdle() { #expect(d(lid: true, idle: 0) == true) }
 
     @Test("se nel frattempo è ripartito un lavoro, si annulla")
     func workRestarted() { #expect(d(leases: 1) == false) }
@@ -247,6 +262,27 @@ struct SleepDecisionTests {
 
     @Test("l'attesa è di trenta secondi, non zero")
     func graceIsReal() { #expect(SleepDecision.grace >= 20) }
+
+    @Test("la soglia di inattività è quella che gli ho promesso: cinque minuti")
+    func idleThresholdIsFiveMinutes() { #expect(SleepDecision.idleThreshold == 300) }
+
+    private func v(pendingFor: Double, idle: Double = .infinity,
+                   lid: Bool = false) -> SleepDecision.Verdict {
+        SleepDecision.verdict(lidClosed: lid, leases: 0, screenAwake: false, lidAwake: false,
+                              releaseWhenWorkEnds: true, pendingFor: pendingFor, userIdle: idle)
+    }
+
+    @Test("prima del respiro si aspetta, anche se tutto il resto è a posto")
+    func graceIsWaited() { #expect(v(pendingFor: SleepDecision.grace - 1) == .wait) }
+
+    @Test("un'attesa che non trova mai il suo momento invecchia e cade")
+    func pendingExpires() {
+        #expect(v(pendingFor: SleepDecision.pendingMaxAge - 1) == .sleepNow)
+        #expect(v(pendingFor: SleepDecision.pendingMaxAge + 1) == .cancel)
+    }
+
+    @Test("con lui alla tastiera l'attesa resta in attesa, non si butta")
+    func staysPendingWhileHeIsThere() { #expect(v(pendingFor: 60, idle: 10) == .wait) }
 }
 
 @Suite("Politica — la soglia di batteria")

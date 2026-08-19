@@ -84,6 +84,31 @@ final class PowerAssertion {
         return false
     }
 
+    /// Solo per i banchi: restare fermi cinque minuti per provare una riga di codice non è una
+    /// prova, è un'attesa. In esercizio resta `nil` e nessuno la tocca.
+    static var idleOverride: Double?
+
+    /// Da quanti secondi nessuno tocca tastiera o trackpad.
+    ///
+    /// `HIDIdleTime` è la proprietà che `IOHIDSystem` azzera a ogni evento di ingresso, in
+    /// nanosecondi. È la stessa che legge il salvaschermo, quindi risponde alla domanda giusta —
+    /// «c'è qualcuno?» — invece che a una più debole tipo «lo schermo è acceso».
+    ///
+    /// **Il verso dell'errore è scelto:** se la lettura non riesce si risponde `0`, cioè *l'utente
+    /// è qui*, e il Mac non si addormenta. Un sensore muto non è una stanza vuota, ed è la stessa
+    /// regola con cui il termometro non fa mai mollare la presa quando tace.
+    static func userIdleSeconds() -> Double {
+        if let f = idleOverride { return f }
+        let service = IOServiceGetMatchingService(kIOMainPortDefault,
+                                                  IOServiceMatching("IOHIDSystem"))
+        guard service != 0 else { return 0 }
+        defer { IOObjectRelease(service) }
+        let raw = IORegistryEntryCreateCFProperty(service, "HIDIdleTime" as CFString,
+                                                  kCFAllocatorDefault, 0)?.takeRetainedValue()
+        guard let n = raw as? NSNumber else { return 0 }
+        return n.doubleValue / 1_000_000_000
+    }
+
     /// La modalità che conta davvero, che non è sempre quella scelta.
     ///
     /// **A coperchio chiuso il display non si trattiene mai.** Tenere viva un'asserzione sul
