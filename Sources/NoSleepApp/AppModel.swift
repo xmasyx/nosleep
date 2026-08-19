@@ -76,12 +76,10 @@ final class AppModel: ObservableObject {
         p.standardError = FileHandle.nullDevice
         try? p.run()
     }
+    /// La grazia è iniettabile perché i banchi la abbassano davvero. L'inattività no: quella si
+    /// finge da `PowerAssertion.idleOverride`, che è dove i banchi già la fingono, e un secondo
+    /// rubinetto sulla stessa acqua sarebbe solo un posto in più dove cercare.
     var grace: Double = SleepDecision.grace
-    /// Da quanto tempo nessuno tocca il Mac. Iniettabile per la stessa ragione del termico: un
-    /// banco che per provarsi deve stare fermo cinque minuti non lo lancia nessuno.
-    var userIdleSource: () -> Double = { PowerAssertion.userIdleSeconds() }
-    /// La soglia di inattività, sfilabile solo dai banchi.
-    var idleThreshold: Double = SleepDecision.idleThreshold
     /// Da dove viene la lettura dei gradi. Iniettabile per la stessa ragione di `thermalSource`:
     /// un banco che vuole provare UNA regola deve poter mettere a tacere le altre.
     var temperatureSource: () -> Thermometer.Reading = { Thermometer.read() }
@@ -192,7 +190,9 @@ final class AppModel: ObservableObject {
     private func armPendingSleep() {
         pendingSleepSince = Date().timeIntervalSince1970
         let chiuso = PowerAssertion.isClamshellClosed()
-        lastNote = chiuso ? S.sleepScheduled(Int(grace)) : S.sleepWhenIdle(Int(idleThreshold / 60))
+        lastNote = chiuso
+            ? S.sleepScheduled(Int(grace))
+            : S.sleepWhenIdle(Int(SleepDecision.idleThreshold / 60))
         record(chiuso ? S.logSleepScheduled : S.logSleepPendingIdle)
     }
 
@@ -203,7 +203,7 @@ final class AppModel: ObservableObject {
     /// scrivere, e mezz'ora dopo si alza: è quello il momento, e nessun timer armato prima lo sa.
     private func evaluatePendingSleep(now: Double, leases count: Int) {
         guard let since = pendingSleepSince else { return }
-        let idle = userIdleSource()
+        let idle = PowerAssertion.userIdleSeconds()
         let verdetto = SleepDecision.verdict(lidClosed: PowerAssertion.isClamshellClosed(),
                                              leases: count,
                                              screenAwake: config.screenAwake,
@@ -211,8 +211,7 @@ final class AppModel: ObservableObject {
                                              releaseWhenWorkEnds: config.releaseWhenWorkEnds,
                                              pendingFor: max(0, now - since),
                                              userIdle: idle,
-                                             grace: grace,
-                                             idleThreshold: idleThreshold)
+                                             grace: grace)
         switch verdetto {
         case .wait:
             return

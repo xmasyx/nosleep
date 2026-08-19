@@ -60,9 +60,9 @@ public enum SleepDecision {
     ///
     /// **Le condizioni si rileggono a ogni giro, non si ricordano**: in mezzo minuto il coperchio
     /// può essersi riaperto, un lavoro può essere ripartito, lui può aver riacceso tutto.
-    /// `grace` e `idleThreshold` arrivano come argomenti con il loro valore vero già scritto
-    /// accanto: un banco li abbassa per non aspettare cinque minuti d'orologio, e in esercizio
-    /// nessuno li passa. Cablarli dentro voleva dire o un banco lento o una copia dei numeri.
+    /// `grace` arriva come argomento con il suo valore vero già scritto accanto, perché i banchi
+    /// la abbassano per non aspettare mezzo minuto d'orologio a ogni polo. La soglia di inattività
+    /// invece si legge qui e basta: nessuno la sposta, e i banchi fingono l'inattività a monte.
     public static func verdict(lidClosed: Bool,
                                leases: Int,
                                screenAwake: Bool,
@@ -70,23 +70,10 @@ public enum SleepDecision {
                                releaseWhenWorkEnds: Bool,
                                pendingFor: Double,
                                userIdle: Double,
-                               grace: Double = SleepDecision.grace,
-                               idleThreshold: Double = SleepDecision.idleThreshold) -> Verdict {
+                               grace: Double = SleepDecision.grace) -> Verdict {
         guard leases == 0, !screenAwake, !lidAwake, releaseWhenWorkEnds else { return .cancel }
         guard pendingFor <= pendingMaxAge else { return .cancel }
         guard pendingFor >= grace else { return .wait }
         return (lidClosed || userIdle >= idleThreshold) ? .sleepNow : .wait
-    }
-
-    /// La forma corta, per chi la grazia l'ha già aspettata e vuole solo sapere se è il momento.
-    public static func shouldSleep(lidClosed: Bool,
-                                   leases: Int,
-                                   screenAwake: Bool,
-                                   lidAwake: Bool,
-                                   releaseWhenWorkEnds: Bool,
-                                   userIdle: Double = .infinity) -> Bool {
-        verdict(lidClosed: lidClosed, leases: leases, screenAwake: screenAwake,
-                lidAwake: lidAwake, releaseWhenWorkEnds: releaseWhenWorkEnds,
-                pendingFor: grace, userIdle: userIdle) == .sleepNow
     }
 }

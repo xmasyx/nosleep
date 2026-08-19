@@ -221,14 +221,17 @@ struct PolicyTemperatureTests {
 @Suite("Addormentare davvero, non solo mollare la presa")
 struct SleepDecisionTests {
 
-    /// L'inattività non passata vale «da sempre fermo»: così ogni prova che non parla di lui alla
-    /// tastiera continua a misurare la condizione che dichiara di misurare.
+    /// Si chiede alla funzione che gira davvero nell'app, `verdict`, e non a una scorciatoia
+    /// scritta per i test: una prova che passa da un'altra porta non prova la porta che si usa.
+    ///
+    /// L'inattività non passata vale «da sempre fermo», e il respiro è già stato aspettato: così
+    /// ogni prova che non parla di lui alla tastiera misura la condizione che dichiara.
     private func d(lid: Bool = true, leases: Int = 0, screen: Bool = false,
                    lidAwake: Bool = false, release: Bool = true,
                    idle: Double = .infinity) -> Bool {
-        SleepDecision.shouldSleep(lidClosed: lid, leases: leases, screenAwake: screen,
-                                  lidAwake: lidAwake, releaseWhenWorkEnds: release,
-                                  userIdle: idle)
+        SleepDecision.verdict(lidClosed: lid, leases: leases, screenAwake: screen,
+                              lidAwake: lidAwake, releaseWhenWorkEnds: release,
+                              pendingFor: SleepDecision.grace, userIdle: idle) == .sleepNow
     }
 
     @Test("il caso per cui esiste: coperchio chiuso, lavoro finito, NoSleep spento")

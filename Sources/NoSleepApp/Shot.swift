@@ -381,14 +381,17 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         guard chiamate == 1 else { print("✗ a coperchio chiuso non ha addormentato (\(chiamate))"); exit(1) }
         print("  chiuso               → addormenta       (era già così)")
 
-        // 4. Coperchio riaperto durante l'attesa, con lui che torna: deve annullare.
+        // 4. Coperchio riaperto durante l'attesa, con lui alla tastiera: **non annulla, aspetta**,
+        //    ed è la differenza che questa riga diceva sbagliata fino al 19/08. L'attesa resta
+        //    viva perché la porta dell'inattività può ancora aprirsi: se lui riapre il coperchio e
+        //    poi se ne va, il Mac dorme lo stesso, che è tutto il punto della modifica di oggi.
         chiamate = 0
         let riaperto = nuovo(lidClosed: true, idle: 0)
         riaperto.simulateWorkEnded()
         PowerAssertion.clamshellOverride = false
         riaperto.tickNow(); riaperto.tickNow()
         guard chiamate == 0 else { print("✗ ha addormentato dopo che il coperchio si era riaperto"); exit(1) }
-        print("  riaperto in attesa   → annulla          (le condizioni si rileggono)")
+        print("  riaperto, lui c'è    → aspetta          (la porta dell'inattività resta)")
 
         // 5. NoSleep riacceso durante l'attesa: l'attesa decade, e non riparte da sola.
         chiamate = 0
