@@ -76,12 +76,24 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             print("✗ due stati mostrano lo stesso segno: dalla barra non si distinguono")
             exit(1)
         }
-        // A coperchio chiuso la modalità effettiva è «solo attività», e l'icona deve dire quella.
+        // Il coperchio armato SENZA «tieni sveglio»: il Mac non dorme, il display è libero, ed è
+        // «solo attività».
         guard Icons.glyph(awake: false, mode: .screenAndActivity, lid: true) == Icons.awakeActivity else {
-            print("✗ col coperchio armato la barra non mostra il segno di «solo attività»")
+            print("✗ col solo coperchio armato la barra non mostra il segno di «solo attività»")
             exit(1)
         }
-        print("✓ tre stati, tre segni diversi, e il coperchio segue «solo attività»")
+        // **Il polo che era rosso fino al 19/08.** Con «prepara il coperchio» accesa la presa del
+        // coperchio è armata a ogni lavoro, e prima decideva lei il segno: il fulmine restava vuoto
+        // anche in «schermo e attività», cioè la barra mentiva sulla modalità scelta a mano.
+        guard Icons.glyph(awake: true, mode: .screenAndActivity, lid: true) == Icons.awakeScreen else {
+            print("✗ col coperchio armato la modalità «schermo e attività» non mostra il fulmine pieno")
+            exit(1)
+        }
+        guard Icons.glyph(awake: true, mode: .activityOnly, lid: true) == Icons.awakeActivity else {
+            print("✗ col coperchio armato «solo attività» non mostra il fulmine vuoto")
+            exit(1)
+        }
+        print("✓ tre stati, tre segni diversi, e il coperchio armato non cancella la modalità")
         exit(0)
     }
 

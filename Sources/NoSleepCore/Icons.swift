@@ -35,10 +35,14 @@ import Foundation
 /// è lo stato in cui il Mac lavora e nessuno lo guarda, ed è quello in cui lui vive; l'altro tiene
 /// acceso **anche** il display, cioè aggiunge qualcosa, e il pieno è come si scrive «aggiunge».
 ///
-/// **Perché non c'è un quarto stato per il coperchio chiuso.** Con il coperchio abbassato lo schermo
-/// è spento, quindi quell'icona non la vedrebbe nessuno proprio quando sarebbe in uso. E siccome a
-/// coperchio chiuso la modalità effettiva è comunque «solo attività», l'icona giusta in quel momento
-/// è già il fulmine vuoto. Lo stato del coperchio si legge nel pannello, dove si può leggere.
+/// **Perché non c'è un quarto stato per il coperchio.** Con il coperchio abbassato lo schermo è
+/// spento e quell'icona non la vedrebbe nessuno proprio quando sarebbe in uso. Il punto delicato è
+/// un altro, ed è costato un difetto vissuto per una settimana: la presa del coperchio **armata**
+/// non è il coperchio **abbassato**. Con «prepara il coperchio» accesa — la sua configurazione — la
+/// presa si arma insieme a «tieni sveglio», cioè a ogni lavoro; farla decidere qui voleva dire
+/// cancellare la modalità e mostrare il fulmine vuoto per sempre, anche in «schermo e attività»
+/// (suo referto, 2026-08-19). Il peso lo decide la modalità e nient'altro. Lo stato del coperchio si
+/// legge nel pannello, dove si può leggere.
 public enum Icons {
     /// Niente in presa: il Mac può andare in sleep.
     public static let idle = "zzz"
@@ -75,8 +79,13 @@ public enum Icons {
 
     public static func glyph(awake: Bool, mode: AwakeMode, lid lidOn: Bool) -> String {
         guard awake || lidOn else { return idle }
-        // A coperchio chiuso la modalità effettiva è comunque solo attività, e l'icona lo rispetta.
-        if lidOn { return awakeActivity }
+        // Solo il coperchio armato, senza «tieni sveglio»: il Mac non si addormenta ma il display è
+        // libero di spegnersi, che è esattamente «solo attività».
+        guard awake else { return awakeActivity }
+        // `lidOn` NON è il coperchio abbassato, è la presa del coperchio armata — e con «prepara il
+        // coperchio» accesa si arma insieme a «tieni sveglio», cioè sempre. Farla decidere qui
+        // cancellava la modalità e il fulmine restava vuoto anche in «schermo e attività»
+        // (suo referto, 2026-08-19). La modalità è l'unica cosa che decide il peso.
         return mode == .screenAndActivity ? awakeScreen : awakeActivity
     }
 }
