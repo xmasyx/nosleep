@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # temporanea e l'unica destinazione vera è /Applications (2026-08-07, sua segnalazione).
 DEST="${1:-${TMPDIR:-/tmp}/NoSleep-build}"
 APP="$DEST/NoSleep.app"
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 cd "$ROOT"
 

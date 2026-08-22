@@ -217,3 +217,7 @@ mode helps, and on a stock Mac it is already on for battery (`pmset -g custom`, 
 macOS 15 or later. Built and verified on macOS 26.5.2, Apple M4 Max.
 
 No network, no telemetry, no account.
+
+## What changed, and when
+
+[CHANGELOG.md](CHANGELOG.md). Current version **1.1.0**.
