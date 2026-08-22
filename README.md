@@ -151,7 +151,7 @@ anywhere. The black is the point. It is what makes the dust visible while you ta
 It always ends on its own. Three ways out that share no code: the timer runs out, an independent
 watchdog closes it three seconds later if the timer never fired, and killing the process drops
 everything with it, because the event tap belongs to the process. Two doors are left open on
-purpose — **Control Option Command Esc** ends it immediately, and macOS's own ⌘⌥Esc is deliberately
+purpose — **⌃⌥⌘ esc** (control-option-command-escape) ends it immediately, and macOS's own ⌘⌥Esc is deliberately
 not swallowed, because a force-quit panel is the last door anyone has.
 
 Letters, clicks and ⌘Q are blocked by the window itself and need no permission at all. The function

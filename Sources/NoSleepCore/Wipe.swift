@@ -29,9 +29,12 @@ public enum WipeExit {
     /// Il codice del tasto Esc su qualunque tastiera Mac.
     public static let escapeKeyCode: UInt16 = 53
 
-    /// Come si scrive nel piede della schermata. Le parole per esteso, non i simboli: ⌃⌥⌘ è
-    /// illeggibile a mezzo metro dallo schermo, che è la distanza da cui si pulisce.
-    public static let label = "Control Option Command Esc"
+    /// Come si scrive nel piede della schermata: **i simboli dei tasti, come li porta stampati la
+    /// tastiera**, più `esc` per esteso perché il suo simbolo (⎋) non è stampato su nessun tasto.
+    ///
+    /// Era scritto a parole («Control Option Command Esc») e lui l'ha corretto il 2026-08-22: chi
+    /// guarda cerca sulla tastiera la forma che sta leggendo, e tre parole non hanno nessuna forma.
+    public static let label = "⌃⌥⌘ esc"
 
     /// Riconosce la combinazione.
     ///
