@@ -464,6 +464,107 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
     /// Il banco delle Preferenze, e prova **la cosa che si è rotta il 7/08**: l'app non deve mai
     /// cambiare politica di attivazione, perché farlo scombina l'elemento nella barra dei menu e il
     /// fulmine smette di rispondere al clic. La finestra deve venire avanti restando `.accessory`.
+    /// `--selftest-wipe` — la pulizia della tastiera, provata dove fa male: **si spegne da sola?**
+    ///
+    /// I primi quattro poli sono pura logica e costano niente. I tre che contano accendono la
+    /// schermata vera su questo Mac e pretendono che sparisca: uno per la scadenza, uno per il
+    /// ritorno allo stato di prima, uno per il cane da guardia con il giro principale ucciso a
+    /// mano. È l'unico modo di provare l'anti-claim AC-6, che dice che la tastiera non deve mai
+    /// restare bloccata: una regola del genere non si verifica leggendo il codice.
+    @MainActor static func checkWipe() -> Never {
+        func fail(_ why: String) -> Never { print("✗ \(why)"); exit(1) }
+
+        // 1. Le tre durate, e nessuna quarta.
+        guard WipeDuration.allCases.map(\.rawValue) == [60, 120, 300] else {
+            fail("le durate non sono 1, 2 e 5 minuti: \(WipeDuration.allCases.map(\.rawValue))")
+        }
+        guard WipeDuration.allCases.map(\.label) == ["1 min", "2 min", "5 min"] else {
+            fail("le etichette delle durate non si leggono come dovrebbero")
+        }
+        print("  durate               → 1, 2, 5 minuti, nessuna infinita")
+
+        // 2. La combinazione d'uscita, con i suoi poli negativi. Un riconoscitore troppo largo
+        //    farebbe uscire dalla pulizia mentre passi lo straccio; troppo stretto lascerebbe
+        //    dentro chi vuole uscire, che è il guasto grave dei due.
+        let esc = WipeExit.escapeKeyCode
+        let poli: [(String, Bool, Bool)] = [
+            ("Control Option Command Esc", WipeExit.matches(keyCode: esc, control: true, option: true, command: true), true),
+            ("Esc nudo", WipeExit.matches(keyCode: esc, control: false, option: false, command: false), false),
+            ("Command Esc", WipeExit.matches(keyCode: esc, control: false, option: false, command: true), false),
+            ("Control Option Esc", WipeExit.matches(keyCode: esc, control: true, option: true, command: false), false),
+            ("Control Option Command A", WipeExit.matches(keyCode: 0, control: true, option: true, command: true), false),
+            ("uscita di sistema Command Option Esc", WipeExit.isForceQuit(keyCode: esc, control: false, option: true, command: true), true),
+            ("la nostra non è quella di sistema", WipeExit.isForceQuit(keyCode: esc, control: true, option: true, command: true), false),
+        ]
+        for (nome, avuto, atteso) in poli where avuto != atteso {
+            fail("il riconoscitore sbaglia su «\(nome)»: \(avuto) invece di \(atteso)")
+        }
+        print("  combinazione d'uscita → \(WipeExit.label), 5 poli negativi tenuti")
+
+        // 3. Il conto alla rovescia.
+        let orologio = [(300.0, "05:00"), (90.0, "01:30"), (5.0, "00:05"), (0.0, "00:00"), (-3.0, "00:00")]
+        for (r, atteso) in orologio where WipeClock.countdown(remaining: r) != atteso {
+            fail("il conto alla rovescia dice \(WipeClock.countdown(remaining: r)) invece di \(atteso)")
+        }
+        print("  conto alla rovescia  → mm:ss, mai negativo")
+
+        // 4. Il libro. Un doppione non rompe niente e si nota solo dopo settimane, che è la ragione
+        //    per cui lo controlla una macchina.
+        let q = Quotes.all
+        guard q.count >= 20 else { fail("solo \(q.count) frasi: poche perché non si ripetano") }
+        guard Set(q.map(\.text)).count == q.count else { fail("ci sono due frasi identiche") }
+        for f in q where f.text.isEmpty || f.author.isEmpty || f.work.isEmpty {
+            fail("una frase senza testo, autore o opera: «\(f.text)»")
+        }
+        guard Quotes.pick(-1) == q[q.count - 1], Quotes.pick(q.count) == q[0] else {
+            fail("la scelta della frase non gira in tondo agli estremi")
+        }
+        print("  citazioni            → \(q.count) frasi, tutte con autore e opera, nessuna ripetuta")
+
+        // ── Da qui in poi si accende sul serio ────────────────────────────────
+        let schermo = WipeScreen.shared
+        schermo.record = { _ in }
+        let prima = NSApp.presentationOptions
+
+        schermo.start(seconds: 1.2)
+        guard schermo.isActive else { fail("la pulizia non si è accesa") }
+        guard schermo.benchWindowCount == NSScreen.screens.count else {
+            fail("finestre \(schermo.benchWindowCount) per \(NSScreen.screens.count) schermi: uno resta scoperto")
+        }
+        guard schermo.benchAssertionHeld else { fail("il display non è tenuto acceso durante la pulizia") }
+        guard NSApp.presentationOptions.contains(.disableProcessSwitching) else {
+            fail("il cambio di applicazione non è bloccato")
+        }
+        print("  accesa               → \(schermo.benchWindowCount) schermi coperti, display tenuto acceso")
+
+        RunLoop.main.run(until: Date().addingTimeInterval(2.5))
+
+        guard !schermo.isActive else { fail("SCADUTA E ANCORA ACCESA — è l'anti-claim AC-6") }
+        guard schermo.benchWindowCount == 0 else { fail("restano \(schermo.benchWindowCount) finestre aperte") }
+        guard !schermo.benchTapInstalled else { fail("il tap è rimasto installato: la tastiera resta bloccata") }
+        guard !schermo.benchAssertionHeld else { fail("la presa sul display non è stata restituita") }
+        guard NSApp.presentationOptions == prima else {
+            fail("le opzioni di presentazione non sono tornate come prima")
+        }
+        print("  scaduta              → tutto mollato, stato identico a prima")
+
+        // 7. Il cane da guardia: si uccide il giro principale e si guarda se qualcun altro chiude.
+        //    Senza questo polo, la seconda via d'uscita sarebbe una cosa scritta e mai eseguita.
+        schermo.start(seconds: 1.0)
+        schermo.disarmTickerForBench()
+        RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+        guard schermo.isActive else { fail("il giro era disarmato eppure si è chiusa: il polo non prova niente") }
+        RunLoop.main.run(until: Date().addingTimeInterval(3.5))
+        guard !schermo.isActive else { fail("col giro morto NESSUNO ha chiuso la pulizia — AC-6") }
+        guard schermo.benchWindowCount == 0, !schermo.benchTapInstalled else {
+            fail("il cane da guardia ha chiuso a metà")
+        }
+        print("  giro principale morto → chiude il cane da guardia, entro 3 secondi dalla scadenza")
+
+        print("✓ la pulizia si spegne da sola per tre strade indipendenti")
+        exit(0)
+    }
+
     @MainActor static func checkPreferences() -> Never {
         let model = AppModel()
         // La condizione di partenza dell'app vera gliela dà `LSUIElement` nell'Info.plist; il
@@ -533,6 +634,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             || CommandLine.arguments.contains("--selftest-lidfollow")
             || CommandLine.arguments.contains("--selftest-login")
             || CommandLine.arguments.contains("--selftest-prefs")
+            || CommandLine.arguments.contains("--selftest-wipe")
     }
 
     static func sandbox() -> URL {
@@ -570,6 +672,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest-lidfollow") { Self.checkLidFollow() }
         if CommandLine.arguments.contains("--selftest-login") { Self.checkLogin() }
         if CommandLine.arguments.contains("--selftest-prefs") { Self.checkPreferences() }
+        if CommandLine.arguments.contains("--selftest-wipe") { Self.checkWipe() }
 
         // Le sonde (`--scatta`, `--selftest-*`) sono processi usa-e-getta e devono poter girare
         // accanto all'app installata; l'app vera invece è una sola.

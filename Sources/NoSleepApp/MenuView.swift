@@ -50,6 +50,17 @@ struct MenuView: View {
 
             Divider().overlay(Color(s.rule))
 
+            // La pulizia sta in fondo e da sola: non è un interruttore di stato come le righe
+            // sopra, è una cosa che **succede adesso**, e mescolarla agli interruttori la farebbe
+            // premere per sbaglio.
+            VStack(alignment: .leading, spacing: 14) {
+                Rows.wipe(model: model, s: s)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Divider().overlay(Color(s.rule))
+
             footer
         }
         .frame(width: 340)

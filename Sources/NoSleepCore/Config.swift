@@ -53,6 +53,10 @@ public struct Config: Codable, Equatable, Sendable {
     /// sveglio un portatile che sta per spegnersi non finisce il lavoro, lo fa morire più in là.
     public var batteryFloorOn: Bool
     public var batteryFloor: Int
+    /// Quanto dura la pulizia della tastiera scelta in Preferenze. **Nasce a un minuto**: è la più
+    /// corta, ed è quella giusta come stato di nascita perché un blocco della tastiera che parte
+    /// per sbaglio deve costare il meno possibile a chi non sa ancora come si esce.
+    public var wipeDuration: WipeDuration
 
     public init(screenAwake: Bool = false,
                 awakeMode: AwakeMode = .screenAndActivity,
@@ -61,7 +65,8 @@ public struct Config: Codable, Equatable, Sendable {
                 autoArmOnWork: Bool = false,
                 lidFollowsAwake: Bool = false,
                 batteryFloorOn: Bool = true,
-                batteryFloor: Int = 20) {
+                batteryFloor: Int = 20,
+                wipeDuration: WipeDuration = .one) {
         self.screenAwake = screenAwake
         self.awakeMode = awakeMode
         self.lidAwake = lidAwake
@@ -70,6 +75,7 @@ public struct Config: Codable, Equatable, Sendable {
         self.lidFollowsAwake = lidFollowsAwake
         self.batteryFloorOn = batteryFloorOn
         self.batteryFloor = batteryFloor
+        self.wipeDuration = wipeDuration
     }
 
     /// I valori proposti. Cinque, non un cursore: una soglia di batteria non ha bisogno della
@@ -78,7 +84,7 @@ public struct Config: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case screenAwake, awakeMode, lidAwake, releaseWhenWorkEnds, autoArmOnWork
-        case lidFollowsAwake, batteryFloorOn, batteryFloor
+        case lidFollowsAwake, batteryFloorOn, batteryFloor, wipeDuration
     }
 
     /// Un campo aggiunto dopo non deve far fallire la lettura di un file scritto prima: senza
@@ -94,6 +100,7 @@ public struct Config: Codable, Equatable, Sendable {
         lidFollowsAwake = try c.decodeIfPresent(Bool.self, forKey: .lidFollowsAwake) ?? false
         batteryFloorOn = try c.decodeIfPresent(Bool.self, forKey: .batteryFloorOn) ?? true
         batteryFloor = try c.decodeIfPresent(Int.self, forKey: .batteryFloor) ?? 20
+        wipeDuration = try c.decodeIfPresent(WipeDuration.self, forKey: .wipeDuration) ?? .one
     }
 
     /// Gli stati di nascita, che sono un requisito e non un default di comodo (ISC-40).
@@ -117,7 +124,8 @@ public struct Config: Codable, Equatable, Sendable {
                       autoArmOnWork: saved.autoArmOnWork,
                       lidFollowsAwake: saved.lidFollowsAwake,
                       batteryFloorOn: saved.batteryFloorOn,
-                      batteryFloor: saved.batteryFloor)
+                      batteryFloor: saved.batteryFloor,
+                      wipeDuration: saved.wipeDuration)
     }
 
     @discardableResult

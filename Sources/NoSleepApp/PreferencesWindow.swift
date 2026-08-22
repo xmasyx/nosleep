@@ -84,6 +84,10 @@ struct PreferencesView: View {
             Divider().overlay(Color(s.rule))
             Rows.battery(model: model, s: s)
             Divider().overlay(Color(s.rule))
+            Rows.wipe(model: model, s: s)
+            Divider().overlay(Color(s.rule))
+            Rows.wipeAccess(model: model, s: s)
+            Divider().overlay(Color(s.rule))
             Rows.login(model: model, s: s)
             Spacer(minLength: 0)
         }

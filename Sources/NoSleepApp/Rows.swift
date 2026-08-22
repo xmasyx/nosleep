@@ -91,6 +91,44 @@ enum Rows {
         }
     }
 
+    /// La pulizia della tastiera: le tre durate scelgono, il bottone parte.
+    ///
+    /// **Due comandi su una riga sola, e la divisione dei ruoli è quella che rende innocuo un
+    /// click sbagliato:** le caselle non fanno partire niente, quindi l'unica cosa che spegne lo
+    /// schermo è un bottone che si chiama «Pulisci». La riga dice anche come si esce **prima** di
+    /// partire, che è l'unico momento in cui si può ancora leggere con calma.
+    static func wipe(model: AppModel, s: SurfacePalette) -> some View {
+        NSRow(title: S.wipeTitle,
+              note: S.wipeNote + " " + S.wipeExitNote(WipeExit.label),
+              s: s) {
+            NSButton(title: S.wipeStartButton, s: s) { model.startWipe() }
+        } extra: {
+            HStack(spacing: 6) {
+                ForEach(WipeDuration.allCases, id: \.rawValue) { d in
+                    NSChip(title: d.label, selected: model.config.wipeDuration == d, s: s) {
+                        model.setWipeDuration(d)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Solo in Preferenze: il permesso si concede una volta e non è un comando di tutti i giorni.
+    /// La riga cambia faccia quando manca, invece di mostrare uno stato che nessuno può leggere.
+    static func wipeAccess(model: AppModel, s: SurfacePalette) -> some View {
+        NSRow(title: S.wipeAxTitle,
+              note: model.accessibilityGranted ? S.wipeAxNote : S.wipeAxMissing,
+              s: s) {
+            if !model.accessibilityGranted {
+                NSButton(title: S.wipeAxOpenSettings, s: s) { model.openAccessibilitySettings() }
+            } else {
+                Text("attivo")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(s.active))
+            }
+        }
+    }
+
     static func login(model: AppModel, s: SurfacePalette) -> some View {
         NSRow(title: S.loginTitle, note: S.loginNote, s: s) {
             NSSwitch(isOn: model.launchesAtLogin, s: s) { model.setLaunchAtLogin($0) }

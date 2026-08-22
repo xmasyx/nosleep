@@ -69,6 +69,40 @@ public enum S {
     public static let releaseNote =
         "Finito l'ultimo lavoro il Mac torna a dormire: subito se il coperchio è abbassato, dopo cinque minuti che lo lasci stare se è alzato."
 
+    // ── Pulizia della tastiera ────────────────────────────────────────────────
+    //
+    // Le parole dicono che cosa succede al Mac — schermo nero, tastiera ferma — e mai come è fatto
+    // dentro. La riga più importante di tutte è quella che dice **come si esce**, e infatti compare
+    // due volte: nel pannello prima di partire, e nel piede della schermata mentre è accesa.
+
+    public static let wipeTitle = "Pulisci la tastiera"
+    /// Il bottone dice **il verbo**, non ripete il titolo: «Pulisci la tastiera» scritto due volte
+    /// sulla stessa riga si legge come un errore, e infatti lo era (visto nella fotografia del
+    /// pannello, 2026-08-22).
+    public static let wipeStartButton = "Pulisci"
+    public static let wipeNote =
+        "La tastiera smette di rispondere e lo schermo diventa nero, così passi lo straccio senza scrivere niente. Torna tutto da solo alla scadenza."
+    public static func wipeExitNote(_ combo: String) -> String {
+        "Per uscire prima: \(combo)."
+    }
+
+    /// Il piede della schermata nera. Tre cose e nient'altro: che cosa sta succedendo, quanto
+    /// manca, come si esce.
+    public static let wipeStatus = "Pulizia della tastiera"
+    public static let wipeRemaining = "rimanenti"
+    public static let wipeExitWord = "esci"
+
+    public static let wipeDurationTitle = "Durata della pulizia"
+    public static let wipeDurationNote =
+        "Il blocco si toglie sempre da solo alla scadenza, anche se parte per sbaglio. Cinque minuti è il massimo."
+
+    public static let wipeAxTitle = "Blocca anche i tasti funzione"
+    public static let wipeAxNote =
+        "Serve il permesso di Accessibilità, e vale solo mentre la pulizia è accesa. Senza, restano vivi i tasti F, la luminosità, il volume e la Dettatura."
+    public static let wipeAxMissing =
+        "Manca il permesso di Accessibilità: la pulizia parte lo stesso, ma i tasti funzione e i comandi del volume restano vivi."
+    public static let wipeAxOpenSettings = "Apri Impostazioni di Sistema"
+
     // ── Piede ────────────────────────────────────────────────────────────────
 
     public static let batteryTitle = "Lascia dormire il Mac sotto una certa carica"
@@ -113,6 +147,17 @@ public enum S {
         "va in sleep quando lasci il Mac fermo \(min) minuti"
     }
     public static func logMode(_ m: String) -> String { "modalità cambiata in \(m)" }
+
+    public static func logWipeStart(_ minuti: Int) -> String {
+        "pulizia della tastiera, \(minuti) \(minuti == 1 ? "minuto" : "minuti")"
+    }
+    public static let logWipeManual = "pulizia finita, uscita a mano"
+    public static let logWipeExpired = "pulizia finita, tempo scaduto"
+    public static let logWipeWatchdog = "pulizia chiusa dal cane da guardia: il timer non era scattato"
+    public static let logWipeNoAX =
+        "pulizia senza permesso di Accessibilità: i tasti funzione non sono bloccati"
+    public static let logWipeSecureInput =
+        "un'altra app tiene l'input protetto: i tasti non passano da noi e non possiamo bloccarli tutti"
 
     public static let installCancelled =
         "Per il coperchio chiuso serve la password di amministratore, una volta sola."

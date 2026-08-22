@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import IOKit.ps
@@ -374,6 +375,47 @@ final class AppModel: ObservableObject {
         refresh()
     }
 
+    /// La durata scelta per la pulizia. Si ricorda, perché è una preferenza e non un comando.
+    func setWipeDuration(_ d: WipeDuration) {
+        guard d != config.wipeDuration else { return }
+        config.wipeDuration = d
+        persist()
+    }
+
+    /// Avvia la pulizia della tastiera.
+    ///
+    /// **Il pannello si chiude prima**, ed è la stessa lezione delle Preferenze: la schermata nera
+    /// nasce sotto un pannello ancora aperto, e il pannello resta lì sopra a farsi guardare.
+    func startWipe() {
+        MenuBarPanel.dismiss()
+        // Il permesso si chiede **qui e non all'avvio**: chiedere all'accensione un permesso che
+        // serve a una funzione che magari non userà mai è il modo migliore per farselo negare. E
+        // si parte comunque, con o senza: senza, il blocco vale per i tasti normali e non per la
+        // fila alta, e la riga in Preferenze lo dice invece di far finta di niente.
+        if !accessibilityGranted {
+            let chiave = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            _ = AXIsProcessTrustedWithOptions([chiave: true] as CFDictionary)
+        }
+        let d = config.wipeDuration
+        WipeScreen.shared.record = { [weak self] event in
+            Task { @MainActor in self?.record(event) }
+        }
+        // Un giro di corsa per lasciar chiudere il pannello: senza, la finestra nera nasce mentre
+        // la sua sta ancora scomparendo e per una frazione di secondo si vedono tutte e due.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            WipeScreen.shared.start(seconds: d.seconds)
+        }
+    }
+
+    /// Il permesso c'è? Letto **quando serve** e non tenuto in una variabile: l'utente lo concede
+    /// in Impostazioni di Sistema mentre l'app gira, e una copia in memoria resterebbe indietro.
+    var accessibilityGranted: Bool { AXIsProcessTrusted() }
+
+    func openAccessibilitySettings() {
+        let u = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        if let url = URL(string: u) { NSWorkspace.shared.open(url) }
+    }
+
     func setLaunchAtLogin(_ on: Bool) {
         LoginItem.set(on)
         launchesAtLogin = LoginItem.isEnabled
@@ -418,7 +460,7 @@ final class AppModel: ObservableObject {
 
     private func persist() { config.save(to: Paths.config()) }
 
-    private func record(_ event: String) {
+    func record(_ event: String) {
         Log.append(LogEntry(at: Date().timeIntervalSince1970,
                             who: "app",
                             event: event,

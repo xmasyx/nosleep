@@ -142,6 +142,25 @@ There is a third one you can switch off but probably should not: on battery, bel
 
 <img src="https://raw.githubusercontent.com/xmasyx/nosleep/main/docs/preferenze.png" width="420" alt="NoSleep preferences: the switches above, each with the sentence explaining what it does">
 
+## Clean the keyboard
+
+Pick 1, 2 or 5 minutes and the keyboard stops answering: the screen goes black, a line from a book
+sits in the middle of it, and you can wipe the keys — and the screen — without typing anything
+anywhere. The black is the point. It is what makes the dust visible while you take it off.
+
+It always ends on its own. Three ways out that share no code: the timer runs out, an independent
+watchdog closes it three seconds later if the timer never fired, and killing the process drops
+everything with it, because the event tap belongs to the process. Two doors are left open on
+purpose — **Control Option Command Esc** ends it immediately, and macOS's own ⌘⌥Esc is deliberately
+not swallowed, because a force-quit panel is the last door anyone has.
+
+Letters, clicks and ⌘Q are blocked by the window itself and need no permission at all. The function
+row — brightness, volume, Dictation — needs Accessibility, and NoSleep asks for it the first time
+you clean, never at launch. Say no and cleaning still works; the preferences row tells you exactly
+which keys stay alive instead of pretending.
+
+The quotes are twenty lines of public-domain Italian literature, each with its author and work.
+
 ## With Claude Code
 
 Claims are taken and returned for you, so agent sessions keep the Mac up exactly

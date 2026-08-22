@@ -86,6 +86,12 @@ echo "▸ banco dell'addormentamento…"
 echo "▸ banco del coperchio che segue…"
 "$ROOT/.build/release/NoSleepApp" --selftest-lidfollow
 
+# La pulizia della tastiera, provata sull'unica cosa che conta davvero: si spegne da sola? Il polo
+# del cane da guardia gira col giro principale ucciso a mano, cioè nel caso in cui la tastiera
+# resterebbe bloccata. Accende la schermata nera per un paio di secondi: è voluto, è la prova.
+echo "▸ banco della pulizia della tastiera…"
+"$ROOT/.build/release/NoSleepApp" --selftest-wipe
+
 # Le Preferenze provate sulla trappola che Otium ha spedito: l'icona che resta nel Dock.
 echo "▸ banco delle Preferenze…"
 "$ROOT/.build/release/NoSleepApp" --selftest-prefs
