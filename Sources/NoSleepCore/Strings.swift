@@ -76,12 +76,12 @@ public enum S {
     // due volte: nel pannello prima di partire, e nel piede della schermata mentre è accesa.
 
     public static let wipeTitle = "Pulisci la tastiera"
-    /// Il bottone dice **il verbo**, non ripete il titolo: «Pulisci la tastiera» scritto due volte
-    /// sulla stessa riga si legge come un errore, e infatti lo era (visto nella fotografia del
-    /// pannello, 2026-08-22).
-    public static let wipeStartButton = "Pulisci"
+    /// Il bottone dice **che cosa fa il click**, non ripete il titolo della riga: «Pulisci la
+    /// tastiera» con accanto «Pulisci» erano la stessa parola due volte, e la seconda non
+    /// aggiungeva niente. «Avvia» è sua (2026-08-22).
+    public static let wipeStartButton = "Avvia"
     public static let wipeNote =
-        "La tastiera smette di rispondere e lo schermo diventa nero, così passi lo straccio senza scrivere niente. Torna tutto da solo alla scadenza."
+        "La tastiera smette di rispondere e lo schermo diventa nero. Torna tutto da solo alla scadenza."
     public static func wipeExitNote(_ combo: String) -> String {
         "Per uscire prima: \(combo)."
     }
