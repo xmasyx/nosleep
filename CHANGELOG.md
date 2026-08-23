@@ -24,6 +24,13 @@ point — it is what makes the dust visible while you take it off.
 - The display is held awake for the duration and released on exit, so the countdown and the way out
   never disappear under your hands.
 
+### Packaging
+
+- First release with a **downloadable app**, signed with a stable certificate (not an Apple
+  Developer ID, so Gatekeeper still asks you to allow it once — the README says how). The build
+  refuses to produce a release artifact signed ad-hoc, and verifies the signature survives the trip
+  through the zip before the file can be published.
+
 ### Sleeping, second half (shipped 2026-08-19, never tagged until now)
 
 - A second door to sleep: with the lid **up**, the Mac now sleeps once the work is done *and* you

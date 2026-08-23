@@ -146,10 +146,37 @@ IDENTITY="NoSleep Dev"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
     echo "▸ firma con identità stabile «${IDENTITY}»…"
     codesign --force --deep --sign "$IDENTITY" --timestamp=none "$APP"
+elif [[ "${NOSLEEP_RELEASE:-0}" == "1" ]]; then
+    # Un artefatto pubblicato NON può essere firmato ad-hoc, e il motivo non è estetico: la firma
+    # ad-hoc cambia identità a ogni ricostruzione, quindi macOS tratta ogni aggiornamento come
+    # un'app diversa e azzera i permessi che l'utente aveva concesso. Meglio fermarsi qui che
+    # spedire uno zip che si rompe da solo al primo aggiornamento.
+    echo "✗ manca l'identità stabile «${IDENTITY}»: un artefatto di rilascio non si firma ad-hoc" >&2
+    echo "  creala una volta sola con Scripts/make-signing-cert.sh" >&2
+    exit 6
 else
     echo "▸ firma ad-hoc (per quella stabile: Scripts/make-signing-cert.sh)…"
     codesign --force --deep --sign - --timestamp=none "$APP" >/dev/null 2>&1 \
         || echo "  (firma saltata: non blocca l'avvio in locale)"
+fi
+
+# Il pacchetto da allegare a una release. `ditto` e non `zip`: `zip` non conserva i metadati del
+# bundle e la firma esce dall'altra parte rotta, cosa che si scopre solo quando qualcuno scarica.
+if [[ "${NOSLEEP_RELEASE:-0}" == "1" ]]; then
+    ZIP="$DEST/NoSleep-${VERSION}.zip"
+    rm -f "$ZIP"
+    ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+    # Il cancello vero: la firma deve sopravvivere al giro dentro e fuori dallo zip, altrimenti
+    # l'utente scarica un'app che macOS rifiuta e non lo sa nessuno fino a quel momento.
+    PROVA="$DEST/prova-firma"
+    rm -rf "$PROVA" && mkdir -p "$PROVA"
+    ditto -x -k "$ZIP" "$PROVA"
+    if ! codesign --verify --deep --strict "$PROVA/NoSleep.app"; then
+        echo "✗ la firma NON sopravvive allo zip: non pubblicare questo file" >&2
+        exit 7
+    fi
+    echo "✓ pacchetto di rilascio: $ZIP (firma verificata dopo il giro nello zip)"
+    rm -rf "$PROVA"
 fi
 
 INSTALLED="/Applications/NoSleep.app"

@@ -38,7 +38,30 @@ claim expires.
 
 ## Install
 
-There is no packaged release yet, so you build it. One command does all of it:
+Two ways in. The zip is quicker; building from source is what most people reading this will do
+anyway, and it is the only path that needs no ritual.
+
+### Download the app
+
+Grab **NoSleep-x.y.z.zip** from [the latest release](https://github.com/xmasyx/nosleep/releases/latest),
+unzip it, drag `NoSleep.app` into `/Applications` — and then read the next paragraph, because the
+first launch is going to fail.
+
+**It is signed, but not by Apple.** The app carries a stable certificate of mine, and it is not
+notarized, so Gatekeeper stops the first launch with a panel saying macOS cannot verify the app is
+free of malware and offering to move it to the Bin. Since macOS 15 the old Control-click-Open trick
+no longer covers this case. The way through, once and for all:
+
+> **System Settings → Privacy & Security**, scroll down to the line naming NoSleep, **Open Anyway**.
+
+What the certificate is worth: every release is the *same* identity to macOS, so an update is
+recognized as the same app rather than as a stranger. What it is not worth: Gatekeeper's blessing.
+That needs an Apple Developer ID, which this project does not have and does not want to need. If
+that trade is not for you, build from source below — same app, no panel.
+
+### Build it from source
+
+One command does all of it:
 
 ```sh
 git clone https://github.com/xmasyx/nosleep.git
