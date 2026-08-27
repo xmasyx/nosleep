@@ -1,0 +1,63 @@
+name: CI
+
+# Compila e prova NoSleep a ogni push e a ogni pull request.
+#
+# PERCHÉ QUESTA CI FA MENO DI QUELLA DI OTIUM E KALAMOS, e la ragione è scritta qui invece che
+# scoperta da chi la guarda andare rossa.
+#
+# `Scripts/build-app.sh` di questa app esegue SEI banchi che le altre due non hanno: icone, cavallo,
+# limitatore termico, addormentamento, coperchio-che-segue, pulizia della tastiera. Alcuni parlano
+# con la gestione dell'energia e con la tastiera vere, e uno accende lo schermo nero per due secondi.
+# Su un runner GitHub non c'è né uno schermo né la gestione dell'energia di un Mac vero, e da qui non
+# posso PROVARE quali sopravvivono: potrei solo indovinare, e una CI che va rossa alla prima corsa
+# per una ragione che non è una regressione è peggio di nessuna CI.
+#
+# Quindi questa CI fa la parte certa — compila e prova — e il pacchetto resta un atto locale. Il
+# giorno che una corsa verde ci dice come si comporta il runner, il passo del pacchetto si aggiunge
+# con la prova in mano invece che con una supposizione.
+#
+# E c'è una seconda ragione, indipendente e non tecnica: l'artefatto di release di NoSleep è firmato
+# con un certificato che vive solo nel portachiavi di chi la costruisce. Un runner non ce l'ha, e
+# `build-app.sh` con `NOSLEEP_RELEASE=1` **giustamente** rifiuta di produrre uno zip firmato ad hoc
+# (exit 6). Farla pubblicare da GitHub vorrebbe dire mettere quella chiave privata nei secret del
+# repo: è una decisione del proprietario, non un dettaglio di configurazione.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Swift version
+        run: swift --version
+
+      # La compilazione in release, la stessa configurazione con cui l'app viene consegnata: un
+      # difetto che compare solo in release è precisamente quello che una build di debug non vede.
+      - name: Build (release)
+        run: swift build -c release
+
+      # I test sono il cancello, non una formalità.
+      - name: Run tests
+        run: swift test
+
+      # I banchi PURI, quelli che non chiedono niente al Mac: disegnano e contano. Restano qui
+      # perché sono gratis e prendono difetti veri — una posa persa nel galoppo non rompe niente e
+      # si nota soltanto guardando.
+      #
+      # Se uno dei due va rosso su un runner e verde in locale, non va spento: va capito perché,
+      # perché quella differenza è essa stessa un'informazione.
+      - name: Pure benches (icons, horse)
+        run: |
+          BIN="$(swift build -c release --show-bin-path)/NoSleepApp"
+          "$BIN" --selftest-icons
+          "$BIN" --selftest-horse
