@@ -258,21 +258,24 @@ final class WipeScreen: ObservableObject {
 
         // Tastiera **e** puntatore: i click non devono raggiungere quello che sta sotto, e con lo
         // straccio addosso al trackpad ne parte più di uno.
-        let mask: CGEventMask =
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.leftMouseDown.rawValue) |
-            (1 << CGEventType.leftMouseUp.rawValue) |
-            (1 << CGEventType.rightMouseDown.rawValue) |
-            (1 << CGEventType.rightMouseUp.rawValue) |
-            (1 << CGEventType.otherMouseDown.rawValue) |
-            (1 << CGEventType.otherMouseUp.rawValue) |
-            (1 << CGEventType.scrollWheel.rawValue) |
-            // 14 è `NX_SYSDEFINED`, la famiglia dei tasti fisici della fila alta: luminosità,
-            // volume, riproduzione, Dettatura. Non ha una costante in `CGEventType`, e senza
-            // questa riga sono proprio i tasti che lui ha chiesto di bloccare a passare.
-            (1 << 14)
+        // Scritta come un elenco e non come una catena di dodici `|`, e non è gusto: con i
+        // letterali non tipizzati il type-checker deve provare gli overload di `<<` e `|` su tutti
+        // gli interi, e la ricerca esplode. Su un Mac veloce il budget basta, su una macchina più
+        // lenta no — la CI ha bocciato la versione a catena con «unable to type-check this
+        // expression in reasonable time» mentre in locale compilava. Le due maschere sono
+        // bit-identiche, verificato: 110010000000101110000011110.
+        let tipiBloccati: [CGEventType] = [
+            .keyDown, .keyUp, .flagsChanged,
+            .leftMouseDown, .leftMouseUp,
+            .rightMouseDown, .rightMouseUp,
+            .otherMouseDown, .otherMouseUp,
+            .scrollWheel,
+        ]
+        var mask: CGEventMask = tipiBloccati.reduce(0) { $0 | (1 << CGEventMask($1.rawValue)) }
+        // 14 è `NX_SYSDEFINED`, la famiglia dei tasti fisici della fila alta: luminosità,
+        // volume, riproduzione, Dettatura. Non ha una costante in `CGEventType`, e senza
+        // questa riga sono proprio i tasti che lui ha chiesto di bloccare a passare.
+        mask |= (1 << 14)
 
         guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap,
                                            place: .headInsertEventTap,
