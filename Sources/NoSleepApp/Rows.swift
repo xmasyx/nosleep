@@ -104,12 +104,35 @@ enum Rows {
             NSButton(title: S.wipeStartButton, s: s) { model.startWipe() }
         } extra: {
             HStack(spacing: 6) {
-                ForEach(WipeDuration.allCases, id: \.rawValue) { d in
-                    NSChip(title: d.label, selected: model.config.wipeDuration == d, s: s) {
-                        model.setWipeDuration(d)
-                    }
-                }
+                wipeChip(.one, model: model, s: s)
+                wipeChip(.two, model: model, s: s)
+                wipeChip(.five, model: model, s: s)
             }
+        }
+    }
+
+    /// Una casella di durata, e **scritte a mano una per una invece che con un `ForEach`**.
+    ///
+    /// Non è gusto: dentro il pannello della barra dei menu (`MenuBarExtra(.window)`) il contenuto
+    /// di un `ForEach` non viene rivalutato quando cambia lo stato osservato. Il clic arrivava
+    /// (la scelta finiva sul disco e la pulizia durava davvero 2 o 5 minuti), ma l'evidenziazione
+    /// restava ferma su «1 min»: da fuori è indistinguibile da una casella che non si può
+    /// selezionare, ed è così che l'ha vista lui il 2026-08-28. Nella finestra delle Preferenze lo
+    /// stesso `ForEach` si aggiornava, il che è la prova che il difetto sta nel pannello e non nel
+    /// modello. Le caselle scritte come figlie dirette si aggiornano in tutte e due le finestre —
+    /// è la stessa forma delle due caselle di modalità qui sopra, che infatti non hanno mai
+    /// sbagliato.
+    private static func wipeChip(_ d: WipeDuration, model: AppModel, s: SurfacePalette) -> some View {
+        NSChip(title: d.label, selected: model.config.wipeDuration == d, s: s) {
+            model.setWipeDuration(d)
+        }
+    }
+
+    /// Il cancello che tiene onesto l'elenco scritto a mano: il giorno che nasce una quarta durata
+    /// questo `switch` non compila più, e chi la aggiunge è costretto a metterla anche nella riga.
+    private static func wipeDurationsAreExhaustive(_ d: WipeDuration) {
+        switch d {
+        case .one, .two, .five: break
         }
     }
 

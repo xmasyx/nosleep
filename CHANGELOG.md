@@ -5,6 +5,16 @@ something new arrives, the patch number when something already there gets fixed.
 
 ## Unreleased
 
+### The 2 min and 5 min keyboard-lock chips were unselectable in the menu bar panel
+
+- Clicking **2 min** or **5 min** in the menu bar panel wrote the choice and a wipe really lasted that
+  long, but the highlight never left **1 min** — from the outside, a chip that cannot be picked.
+- Cause: inside `MenuBarExtra(.window)` the content of a `ForEach` is not re-evaluated when the
+  observed state changes. The same `ForEach` updated correctly in the Preferences window, which is
+  what pinned the fault to the panel rather than to the model. The three chips are now written out
+  one by one, like the two mode chips beside them, and a `switch` over `WipeDuration` fails to build
+  the day a fourth duration is added without being put in the row.
+
 ### Forced sleep waits for Claude Code
 
 - The grace before a forced sleep is now **three minutes**, not thirty seconds: on 2026-08-28 at 06:54 a
