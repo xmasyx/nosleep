@@ -56,11 +56,22 @@ final class AppModel: ObservableObject {
         ThermalLevel.from(processInfo: ProcessInfo.processInfo.thermalState)
     }
 
+    /// C'è un `caffeinate` vivo fra gli altri detentori?
+    ///
+    /// È iniettabile perché il banco `--selftest-sleep` gira contro i detentori veri: mentre
+    /// Claude Code costruisce l'app il suo `caffeinate` è vivo, e senza questo rubinetto il banco
+    /// non potrebbe provare né che il Mac dorme né il polo opposto. La lettura è fresca e non
+    /// riusa `altri`, che arriva solo alla fine di `refresh()`, quindi ha un giro di ritardo ed è
+    /// vuoto ogni volta che l'app sta tenendo il Mac.
+    var caffeinatedSource: () -> Bool = {
+        OtherHolders.current().contains { $0.process == "caffeinate" }
+    }
+
     /// Quello che l'app sta davvero tenendo, letto dall'oggetto che lo tiene. Serve al banco.
     var isActuallyHolding: Bool { assertion.held }
     private let leases = LeaseStore(directory: Paths.leases())
     private var timer: Timer?
-    private var previousLeaseCount = 0
+    private var previousLeases: [Lease] = []
     /// Quando è stata armata l'attesa di addormentare, se ce n'è una. **Non è un timer**: un timer
     /// decide una volta sola e a coperchio alzato la condizione che conta — che lui abbia lasciato
     /// stare il Mac — arriva quando vuole lei, magari venti minuti dopo. L'attesa vive qui e viene
@@ -152,7 +163,8 @@ final class AppModel: ObservableObject {
 
     private func tick() {
         let now = Date().timeIntervalSince1970
-        let count = leases.count(now: now)
+        let vive = leases.alive(now: now)
+        let count = vive.count
         let level = thermalSource()
 
         // Prima si aggiorna la fotografia del mondo, poi si decide: una riga di registro scritta
@@ -173,10 +185,11 @@ final class AppModel: ObservableObject {
         // appena partito un lavoro non deve poter riaccendere niente nello stesso giro.
         apply(.thermal(level))
         apply(.battery(percent: batteryPercent, onAC: onAC))
-        if count != previousLeaseCount {
-            apply(.leases(from: previousLeaseCount, to: count))
-            previousLeaseCount = count
+        if count != previousLeases.count {
+            apply(.leases(from: previousLeases.count, to: count))
         }
+        for riga in LeaseDiff.events(before: previousLeases, after: vive, now: now) { record(riga) }
+        previousLeases = vive
 
         // Dopo la politica, non prima: l'attesa deve vedere la configurazione di adesso, compreso
         // un «tieni sveglio» appena riacceso da un lavoro nuovo.
@@ -217,6 +230,7 @@ final class AppModel: ObservableObject {
     /// scrivere, e mezz'ora dopo si alza: è quello il momento, e nessun timer armato prima lo sa.
     private func evaluatePendingSleep(now: Double, leases count: Int) {
         guard let since = pendingSleepSince else { return }
+        let caffeinated = caffeinatedSource()
         let idle = PowerAssertion.userIdleSeconds()
         // Mai svegliato in questa vita dell'app: allora nessun risveglio recente da rispettare.
         let dalRisveglio = lastWake.map { now - $0 } ?? .infinity
@@ -229,6 +243,7 @@ final class AppModel: ObservableObject {
                                              userIdle: idle,
                                              audioPlaying: Audio.isPlaying(),
                                              sinceWake: dalRisveglio,
+                                             caffeinated: caffeinated,
                                              grace: grace)
         switch verdetto {
         case .wait:

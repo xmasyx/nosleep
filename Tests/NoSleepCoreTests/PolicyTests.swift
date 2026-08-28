@@ -229,11 +229,12 @@ struct SleepDecisionTests {
     private func d(lid: Bool = true, leases: Int = 0, screen: Bool = false,
                    lidAwake: Bool = false, release: Bool = true,
                    idle: Double = .infinity, audio: Bool = false,
-                   sinceWake: Double = .infinity) -> Bool {
+                   sinceWake: Double = .infinity, caffeinated: Bool = false) -> Bool {
         SleepDecision.verdict(lidClosed: lid, leases: leases, screenAwake: screen,
                               lidAwake: lidAwake, releaseWhenWorkEnds: release,
                               pendingFor: SleepDecision.grace, userIdle: idle,
-                              audioPlaying: audio, sinceWake: sinceWake) == .sleepNow
+                              audioPlaying: audio, sinceWake: sinceWake,
+                              caffeinated: caffeinated) == .sleepNow
     }
 
     @Test("il caso per cui esiste: coperchio chiuso, lavoro finito, NoSleep spento")
@@ -279,17 +280,18 @@ struct SleepDecisionTests {
     @Test("se l'interruttore è stato spento durante l'attesa, la decisione decade")
     func toggleTurnedOff() { #expect(d(release: false) == false) }
 
-    @Test("l'attesa è di trenta secondi, non zero")
-    func graceIsReal() { #expect(SleepDecision.grace >= 20) }
+    @Test("l'attesa è di tre minuti, non trenta secondi")
+    func graceIsReal() { #expect(SleepDecision.grace >= 120) }
 
     @Test("la soglia di inattività è quella che gli ho promesso: cinque minuti")
     func idleThresholdIsFiveMinutes() { #expect(SleepDecision.idleThreshold == 300) }
 
-    private func v(pendingFor: Double, idle: Double = .infinity,
-                   lid: Bool = false) -> SleepDecision.Verdict {
+    private func v(pendingFor: Double, idle: Double = .infinity, lid: Bool = false,
+                   caffeinated: Bool = false) -> SleepDecision.Verdict {
         SleepDecision.verdict(lidClosed: lid, leases: 0, screenAwake: false, lidAwake: false,
                               releaseWhenWorkEnds: true, pendingFor: pendingFor, userIdle: idle,
-                              audioPlaying: false, sinceWake: .infinity)
+                              audioPlaying: false, sinceWake: .infinity,
+                              caffeinated: caffeinated)
     }
 
     @Test("prima del respiro si aspetta, anche se tutto il resto è a posto")
@@ -303,6 +305,44 @@ struct SleepDecisionTests {
 
     @Test("con lui alla tastiera l'attesa resta in attesa, non si butta")
     func staysPendingWhileHeIsThere() { #expect(v(pendingFor: 60, idle: 10) == .wait) }
+
+    @Test("il caffeinate di Claude Code è ancora vivo: si aspetta, coperchio chiuso (06:54 del 28/08)")
+    func caffeinateWaitsWithLidClosed() {
+        #expect(v(pendingFor: SleepDecision.grace, lid: true, caffeinated: true) == .wait)
+    }
+
+    @Test("senza caffeinate il coperchio chiuso addormenta (polo negativo)")
+    func noCaffeinateSleepsWithLidClosed() {
+        #expect(d(lid: true, caffeinated: false))
+    }
+
+    @Test("il caffeinate aspetta anche a coperchio alzato e Mac lasciato stare")
+    func caffeinateWaitsWithLidOpen() {
+        #expect(v(pendingFor: SleepDecision.grace,
+                  idle: SleepDecision.idleThreshold,
+                  caffeinated: true) == .wait)
+    }
+
+    @Test("il caffeinate tiene l'attesa armata, non la annulla, su entrambe le porte")
+    func caffeinateNeverCancels() {
+        #expect(v(pendingFor: 60, caffeinated: true) == .wait)
+        #expect(v(pendingFor: 60, lid: true, caffeinated: true) == .wait)
+    }
+}
+
+@Suite("Le parole del sonno")
+struct SleepWordsTests {
+
+    @Test("i minuti interi sono detti in minuti, al singolare e al plurale")
+    func wholeMinutes() {
+        #expect(S.sleepScheduled(60) == "va in sleep fra 1 minuto")
+        #expect(S.sleepScheduled(180) == "va in sleep fra 3 minuti")
+    }
+
+    @Test("i secondi non interi restano secondi (polo negativo)")
+    func nonWholeMinutesStaySeconds() {
+        #expect(S.sleepScheduled(61) == "va in sleep fra 61 secondi")
+    }
 }
 
 @Suite("Politica — la soglia di batteria")

@@ -3,6 +3,19 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
+## Unreleased
+
+### Forced sleep waits for Claude Code
+
+- The grace before a forced sleep is now **three minutes**, not thirty seconds: on 2026-08-28 at 06:54 a
+  lease renewal from the Claude Code hooks arrived late, the app saw zero leases, and put the Mac to
+  sleep under a running turn. Two missed 30-second renewals must not switch the Mac off.
+- While a `caffeinate` process is among the holders (Claude Code runs `caffeinate -i -t 300` for every
+  turn), the forced sleep **waits** on both doors, lid closed or idle. It waits, it does not give up:
+  `caffeinate` expires by itself. `sharingd`, `coreaudiod` and browsers stay ignored, as before.
+- The log now says **which** lease changed: `prenotazione presa <id> (<ttl> s)`, `prenotazione
+  restituita <id>`, `prenotazione scaduta <id>`, computed by diffing the live set tick by tick.
+
 ## 1.1.0 — 2026-08-22
 
 ### Clean the keyboard

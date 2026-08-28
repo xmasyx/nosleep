@@ -63,11 +63,12 @@ public enum S {
         "Serve la password di amministratore, una volta sola. Accendi «Lavora a coperchio chiuso» e poi torna qui."
 
     public static let releaseTitle = "Disattiva quando il lavoro finisce"
-    /// Dice che cosa succede al Mac, e dice **quando**: con il coperchio alzato il momento non è la
-    /// fine del lavoro, è quando lui smette di toccarlo. Scritto male, questa riga sarebbe la
+    /// Dice che cosa succede al Mac, e dice **quando**: dal 28/08 il coperchio abbassato aspetta tre
+    /// minuti, perché un rinnovo arrivato tardi non spenga il Mac sotto il lavoro; con quello
+    /// alzato il momento resta quando lui smette di toccarlo. Scritto male, questa riga sarebbe la
     /// promessa che l'app non mantiene.
     public static let releaseNote =
-        "Finito l'ultimo lavoro il Mac torna a dormire: subito se il coperchio è abbassato, dopo cinque minuti che lo lasci stare se è alzato."
+        "Finito l'ultimo lavoro il Mac torna a dormire: dopo tre minuti se il coperchio è abbassato, dopo cinque minuti che lo lasci stare se è alzato."
 
     // ── Pulizia della tastiera ────────────────────────────────────────────────
     //
@@ -142,14 +143,33 @@ public enum S {
     public static let logSleepCancelled = "sleep annullato, le condizioni sono cambiate"
     public static let logSleepNow = "mando il Mac in sleep"
     public static let logSleepFailed = "il sistema ha rifiutato di andare in sleep"
-    public static func sleepScheduled(_ s: Int) -> String { "va in sleep fra \(s) secondi" }
+    /// I minuti interi si dicono come minuti: la promessa visibile deve dire i tre minuti veri.
+    /// La parola resta fuori dal letterale: il cancello legge il ternario dentro `\( )` come un
+    /// punto interrogativo con uno spazio davanti.
+    public static func sleepScheduled(_ s: Int) -> String {
+        guard s >= 60, s % 60 == 0 else { return "va in sleep fra \(s) secondi" }
+        let minuti = s / 60
+        let parola = minuti == 1 ? "minuto" : "minuti"
+        return "va in sleep fra \(minuti) \(parola)"
+    }
     public static func sleepWhenIdle(_ min: Int) -> String {
         "va in sleep quando lasci il Mac fermo \(min) minuti"
     }
     public static func logMode(_ m: String) -> String { "modalità cambiata in \(m)" }
 
+    /// L'identificatore resta nella riga perché alle 06:54 del 28/08 i soli conteggi «0 → 1 → 0»
+    /// non dicevano quale prenotazione fosse sparita, né se fosse scaduta o restituita.
+    public static func logLeaseTaken(_ id: String, ttl: Int) -> String {
+        "prenotazione presa \(id) (\(ttl) s)"
+    }
+    /// Nomina la prenotazione restituita, così la sua uscita non si confonde con una scadenza.
+    public static func logLeaseReleased(_ id: String) -> String { "prenotazione restituita \(id)" }
+    /// Nomina la prenotazione scaduta, così il rinnovo mancato resta leggibile il giorno dopo.
+    public static func logLeaseExpired(_ id: String) -> String { "prenotazione scaduta \(id)" }
+
     public static func logWipeStart(_ minuti: Int) -> String {
-        "pulizia della tastiera, \(minuti) \(minuti == 1 ? "minuto" : "minuti")"
+        let parola = minuti == 1 ? "minuto" : "minuti"
+        return "pulizia della tastiera, \(minuti) \(parola)"
     }
     public static let logWipeManual = "pulizia finita, uscita a mano"
     public static let logWipeExpired = "pulizia finita, tempo scaduto"

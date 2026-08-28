@@ -21,9 +21,15 @@ import Foundation
 /// lo lasci stare.
 public enum SleepDecision {
 
-    /// Il respiro prima di addormentare. Serve a due cose: un lavoro che riparte subito non viene
-    /// tagliato, e chi ha appena riaperto il coperchio non si vede il Mac spegnersi in faccia.
-    public static let grace: Double = 30
+    /// Il respiro prima di addormentare. Un lavoro che riparte subito non viene tagliato, e chi ha
+    /// appena riaperto il coperchio non si vede il Mac spegnersi in faccia.
+    ///
+    /// Il 2026-08-28 alle 06:53:57 l'app ha visto zero prenotazioni mentre girava un turno di
+    /// Claude Code: il cane da guardia degli hook, che rinnova ogni trenta secondi, aveva saltato
+    /// un rinnovo. Alle 06:54:32 ha lanciato `pmset sleepnow` sotto il lavoro. Tre minuti fanno sì
+    /// che due rinnovi mancati non bastino a spegnere il Mac: la porta del coperchio chiuso paga
+    /// quei tre minuti, quella del coperchio alzato aspetta già cinque minuti d'inattività.
+    public static let grace: Double = 180
 
     /// Da quanto tempo nessuno tocca tastiera o trackpad perché il coperchio **alzato** conti come
     /// «non c'è nessuno». Cinque minuti, sua scelta del 2026-08-19.
@@ -34,9 +40,9 @@ public enum SleepDecision {
     /// **Il caso, trovato a tavolino il 19/08 e non ancora visto sul suo Mac:** il Mac dorme per un
     /// motivo suo mentre una prenotazione è viva, quella scade nel sonno, lui riapre il coperchio e
     /// l'app vede il lavoro finire **in quell'istante**. Se aprire il coperchio non azzera il
-    /// contatore di inattività, mezzo minuto dopo il Mac tornerebbe a dormire in faccia a chi l'ha
-    /// appena aperto. Non ho verificato quell'anello, e un minuto di franchigia lo rende
-    /// irrilevante invece di appoggiarsi a una supposizione.
+    /// contatore di inattività, il Mac potrebbe tornare a dormire in faccia a chi l'ha appena
+    /// aperto. I tre minuti di respiro proteggono già quel percorso; questo minuto protegge anche
+    /// un risveglio arrivato mentre un'attesa più vecchia era già armata, senza supposizioni.
     public static let wakeGuard: Double = 60
 
     /// Quanto può restare armata un'attesa che non trova mai il suo momento.
@@ -51,7 +57,7 @@ public enum SleepDecision {
     public enum Verdict: Equatable, Sendable {
         /// Le condizioni non ci sono più: l'attesa si butta.
         case cancel
-        /// Ancora presto, oppure c'è ancora qualcuno alla tastiera.
+        /// Ancora presto, c'è un `caffeinate` vivo oppure c'è ancora qualcuno alla tastiera.
         case wait
         /// Adesso.
         case sleepNow
@@ -63,8 +69,13 @@ public enum SleepDecision {
     /// - `!screenAwake && !lidAwake`: nel frattempo nessuno ha riacceso NoSleep, né a mano né
     ///   dall'automatismo.
     /// - `releaseWhenWorkEnds`: se l'interruttore è stato spento durante l'attesa, la decisione
-    ///   presa mezzo minuto fa non vale più.
+    ///   presa tre minuti fa non vale più.
     /// - `pendingFor >= grace`: il respiro.
+    /// - `caffeinated`: si aspetta, non si annulla. Il `caffeinate -i -t 300` di Claude Code scade
+    ///   da sé ed è il segnale che un turno sta lavorando, non un detentore perpetuo come
+    ///   `sharingd` o `coreaudiod`, che dall'Iterazione 10 restano ignorati di proposito. Vale per
+    ///   entrambe le porte, a differenza dei due veti della porta dell'inattività: il caso delle
+    ///   06:54 del 28/08 ha mostrato che anche col coperchio chiuso bisogna aspettarlo.
     /// - e infine una porta sola fra le due: coperchio abbassato, oppure nessuno alla tastiera da
     ///   `idleThreshold` **e** niente che stia suonando **e** nessun risveglio appena avvenuto.
     ///
@@ -72,10 +83,10 @@ public enum SleepDecision {
     /// abbassa il coperchio ha già detto quello che voleva, e il caso che ha fatto nascere tutto
     /// era proprio un processo audio che teneva sveglio il Mac chiuso per nove ore.
     ///
-    /// **Le condizioni si rileggono a ogni giro, non si ricordano**: in mezzo minuto il coperchio
+    /// **Le condizioni si rileggono a ogni giro, non si ricordano**: in tre minuti il coperchio
     /// può essersi riaperto, un lavoro può essere ripartito, lui può aver riacceso tutto.
     /// `grace` arriva come argomento con il suo valore vero già scritto accanto, perché i banchi
-    /// la abbassano per non aspettare mezzo minuto d'orologio a ogni polo. La soglia di inattività
+    /// la abbassano per non aspettare tre minuti d'orologio a ogni polo. La soglia di inattività
     /// invece si legge qui e basta: nessuno la sposta, e i banchi fingono l'inattività a monte.
     public static func verdict(lidClosed: Bool,
                                leases: Int,
@@ -86,10 +97,12 @@ public enum SleepDecision {
                                userIdle: Double,
                                audioPlaying: Bool,
                                sinceWake: Double,
+                               caffeinated: Bool,
                                grace: Double = SleepDecision.grace) -> Verdict {
         guard leases == 0, !screenAwake, !lidAwake, releaseWhenWorkEnds else { return .cancel }
         guard pendingFor <= pendingMaxAge else { return .cancel }
         guard pendingFor >= grace else { return .wait }
+        guard !caffeinated else { return .wait }
         if lidClosed { return .sleepNow }
         guard userIdle >= idleThreshold, !audioPlaying, sinceWake >= wakeGuard else { return .wait }
         return .sleepNow

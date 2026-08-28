@@ -348,6 +348,8 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             // polo apposta più sotto.
             m.grace = 0
             m.sleepAction = { chiamate += 1; return true }
+            // Il banco non deve dipendere dal fatto che Claude Code lo stia costruendo.
+            m.caffeinatedSource = { false }
             // Il rilascio a fine lavoro scatta solo se c'era qualcosa da rilasciare: senza questo
             // il banco misurava un non-evento e sembrava un difetto dell'app.
             // Stessa ragione del banco termico: qui si prova l'addormentamento, non le reti.
@@ -437,6 +439,19 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         fineLavoro(subito)
         guard chiamate == 0 else { print("✗ ha addormentato prima dei \(Int(SleepDecision.grace)) secondi di respiro"); exit(1) }
         print("  primo giro           → aspetta          (il respiro è vero)")
+
+        // 10. Il `caffeinate` di Claude Code vale su entrambe le porte e tiene viva l'attesa: il
+        //     caso delle 06:54 del 28/08 non deve ripetersi, ma appena scade il Mac deve dormire.
+        chiamate = 0
+        let caffeinato = nuovo(lidClosed: true, idle: 0)
+        caffeinato.caffeinatedSource = { true }
+        fineLavoro(caffeinato)
+        guard chiamate == 0 else { print("✗ ha addormentato con il caffeinate di Claude Code ancora vivo"); exit(1) }
+        print("  chiuso, caffeinate   → aspetta          (il caso delle 06:54 del 28/08)")
+        caffeinato.caffeinatedSource = { false }
+        caffeinato.tickNow()
+        guard chiamate == 1 else { print("✗ finito il caffeinate non ha addormentato (\(chiamate))"); exit(1) }
+        print("  caffeinate finito    → addormenta       (l'attesa era rimasta armata)")
 
         PowerAssertion.idleOverride = nil
         Audio.override = nil

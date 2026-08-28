@@ -39,19 +39,21 @@ struct CacciaTests {
         let d = Dado()
         for _ in 0..<giri {
             let lid = d.bool(), leases = d.fra(0, 3), screen = d.bool(), lidA = d.bool()
-            let rel = d.bool(), audio = d.bool()
+            let rel = d.bool(), audio = d.bool(), caffe = d.bool()
             let pending = d.reale(-10, 9000), idle = d.reale(0, 1200)
             let risveglio = d.reale(0, 300), grace = d.reale(0, 60)
             let v = SleepDecision.verdict(lidClosed: lid, leases: leases, screenAwake: screen,
                                           lidAwake: lidA, releaseWhenWorkEnds: rel,
                                           pendingFor: pending, userIdle: idle,
-                                          audioPlaying: audio, sinceWake: risveglio, grace: grace)
+                                          audioPlaying: audio, sinceWake: risveglio,
+                                          caffeinated: caffe, grace: grace)
             guard v == .sleepNow else { continue }
             #expect(leases == 0, "addormenta con \(leases) lavori vivi")
             #expect(!screen && !lidA, "addormenta con una presa ancora viva")
             #expect(rel, "addormenta con l'interruttore spento")
             #expect(pending >= grace, "addormenta prima del respiro")
             #expect(pending <= SleepDecision.pendingMaxAge, "addormenta con un'attesa scaduta")
+            #expect(!caffe, "addormenta con il caffeinate di Claude Code ancora vivo")
             guard !lid else { continue }
             #expect(idle >= SleepDecision.idleThreshold, "addormenta con lui alla tastiera")
             #expect(!audio, "addormenta mentre qualcosa sta suonando")
@@ -67,7 +69,8 @@ struct CacciaTests {
             let v = SleepDecision.verdict(lidClosed: d.bool(), leases: 0, screenAwake: false,
                                           lidAwake: false, releaseWhenWorkEnds: true,
                                           pendingFor: pending, userIdle: d.reale(0, 1200),
-                                          audioPlaying: d.bool(), sinceWake: d.reale(0, 300))
+                                          audioPlaying: d.bool(), sinceWake: d.reale(0, 300),
+                                          caffeinated: d.bool())
             #expect(v != .cancel, "butta l'attesa mentre le condizioni ci sono ancora")
         }
     }
