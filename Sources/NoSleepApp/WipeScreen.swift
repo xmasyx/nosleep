@@ -75,7 +75,57 @@ private func wipeTapCallback(proxy: CGEventTapProxy,
         }
     }
 
+    // **Le PRESSIONI si ingoiano, i RILASCI no**, e la regola vale anche per i modificatori nudi
+    // (`flagsChanged`). Non è un buco: un tasto lasciato andare non scrive niente, e un ⌘ premuto
+    // da solo nemmeno, quindi il blocco resta quello di prima.
+    //
+    // Ingoiare un rilascio invece è un guasto che sopravvive alla pulizia: il sistema continua a
+    // credere premuto un tasto che la tua mano ha già mollato, e da lì in poi ogni lettera diventa
+    // una scorciatoia e ⌘⇧3 diventa ⌃⌥⌘⇧3, cioè niente. È esattamente ciò che lui ha visto uscendo
+    // con ⌃⌥⌘esc il 2026-08-28, e la combinazione d'uscita è il caso peggiore perché tiene tre
+    // modificatori insieme proprio nell'istante in cui il tap si sta spegnendo.
+    //
+    // Kalamos, che di tap ne tiene uno sempre acceso, lo aveva già scritto: *«Never consume — a
+    // bare modifier does nothing in other apps, and consuming it would corrupt system modifier
+    // state»*. Qui era scritto il contrario.
+    if type == .keyUp || type == .flagsChanged
+        || type == .leftMouseUp || type == .rightMouseUp || type == .otherMouseUp {
+        return Unmanaged.passUnretained(event)
+    }
+
     return nil
+}
+
+/// Rimette a zero i modificatori che il sistema crede ancora premuti.
+///
+/// Serve come rete: la regola «i rilasci passano» dovrebbe bastare, ma un tap si spegne in mezzo a
+/// una sequenza di tasti e non c'è modo di provare che non ne resti mai uno per strada. Qui si
+/// guarda lo stato vero e si posta un `flagsChanged` vuoto **solo se** qualcosa è rimasto su:
+/// niente da riparare, niente da postare.
+@discardableResult
+func resyncModifiers() -> CGEventFlags {
+    let sporchi: CGEventFlags = [.maskCommand, .maskShift, .maskAlternate, .maskControl, .maskSecondaryFn]
+    let stato = CGEventSource.flagsState(.combinedSessionState)
+    let rimasti = stato.intersection(sporchi)
+    guard !rimasti.isEmpty else { return [] }
+    if let e = CGEvent(source: nil) {
+        e.type = .flagsChanged
+        e.flags = []
+        e.post(tap: .cgSessionEventTap)
+    }
+    return rimasti
+}
+
+/// I modificatori accesi, scritti come si leggono sulla tastiera. Va nel registro, perché un guasto
+/// raro che si ripara da sé lascia una prova sola: quella che abbiamo scritto mentre succedeva.
+func modifierNames(_ f: CGEventFlags) -> String {
+    var n: [String] = []
+    if f.contains(.maskControl) { n.append("⌃") }
+    if f.contains(.maskAlternate) { n.append("⌥") }
+    if f.contains(.maskCommand) { n.append("⌘") }
+    if f.contains(.maskShift) { n.append("⇧") }
+    if f.contains(.maskSecondaryFn) { n.append("fn") }
+    return n.isEmpty ? "nessuno" : n.joined(separator: "")
 }
 
 /// Una finestra senza bordi non diventa mai la finestra di tastiera, e senza quello i tasti
@@ -353,6 +403,11 @@ final class WipeScreen: ObservableObject {
         case .expired: record(S.logWipeExpired)
         case .watchdog: record(S.logWipeWatchdog)
         }
+
+        // La prova, se ricapita. Un modificatore incastrato si ripara da solo alla pressione dopo,
+        // quindi domani non ne resta traccia da nessuna parte: se c'era, lo dice questa riga.
+        let rimasti = resyncModifiers()
+        if !rimasti.isEmpty { record(S.logWipeStuckModifiers(modifierNames(rimasti))) }
     }
 
     // ── Quello che il banco apre ─────────────────────────────────────────────

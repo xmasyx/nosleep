@@ -5,6 +5,22 @@ something new arrives, the patch number when something already there gets fixed.
 
 ## Unreleased
 
+### Keyboard lock: releases are no longer swallowed, and the manual exit is finally on the bench
+
+- The tap swallowed **every** event, key releases and bare modifier transitions included. It now
+  swallows presses only: a released key types nothing and a lone ⌘ types nothing either, so the lock
+  is as tight as before while an app underneath can never be left believing a key is still held.
+- `stop()` now reads the system modifier state, clears it if anything is still set, and writes a log
+  line saying which key it was. The line is meant to be rare: without it a stuck modifier repairs
+  itself on the next keypress and leaves nothing to read the day after.
+- The bench gained the exit that was never measured: expiry, watchdog and dead-loop were covered,
+  the ⌃⌥⌘esc combination was not — the one path that goes through the tap.
+- **What this does not claim.** On 2026-08-28 the screenshot shortcuts stopped working right after a
+  keyboard lock was exited by hand. Putting the old swallow-everything callback back leaves the new
+  bench pole **green**: swallowing a `flagsChanged` moves neither `combinedSessionState` nor
+  `hidSystemState`, so that is not the cause, and the cause is still unknown. The changes above are
+  prudence plus instrumentation for the next occurrence, not a fix for that incident.
+
 ### The 2 min and 5 min keyboard-lock chips were unselectable in the menu bar panel
 
 - Clicking **2 min** or **5 min** in the menu bar panel wrote the choice and a wipe really lasted that

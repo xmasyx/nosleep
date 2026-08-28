@@ -576,6 +576,60 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         }
         print("  giro principale morto → chiude il cane da guardia, entro 3 secondi dalla scadenza")
 
+        // 8. **L'uscita a mano, che era l'unica strada mai provata** (2026-08-28). Le tre prove
+        //    qui sopra escono per scadenza, per cane da guardia e a giro morto: nessuna preme la
+        //    combinazione, cioè nessuna passa dal tap. E il guasto che lui ha visto vive lì —
+        //    esce la pulizia, ma il sistema resta convinto che ⌃⌥⌘ siano ancora premuti.
+        //
+        //    I modificatori si mandano come `flagsChanged` veri, uno alla volta, perché è così che
+        //    li manda una tastiera: mettere i tre bit nei soli `flags` dell'Esc proverebbe una
+        //    sequenza che nessuna mano produce, e il difetto sta proprio nei rilasci.
+        func posta(_ type: CGEventType, code: CGKeyCode, flags: CGEventFlags) {
+            guard let e = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: type == .keyDown) else { return }
+            if type == .flagsChanged { e.type = .flagsChanged }
+            e.flags = flags
+            e.post(tap: .cgSessionEventTap)
+        }
+
+        schermo.start(seconds: 30)
+        if !schermo.benchTapInstalled {
+            print("  ⚠︎ uscita a mano NON MISURATA: senza permesso di Accessibilità il tap non esiste")
+            schermo.stop(.manual)
+        } else {
+            posta(.flagsChanged, code: 0x3B, flags: [.maskControl])
+            posta(.flagsChanged, code: 0x3A, flags: [.maskControl, .maskAlternate])
+            posta(.flagsChanged, code: 0x37, flags: [.maskControl, .maskAlternate, .maskCommand])
+            posta(.keyDown, code: 53, flags: [.maskControl, .maskAlternate, .maskCommand])
+            posta(.keyUp, code: 53, flags: [.maskControl, .maskAlternate, .maskCommand])
+            // I rilasci partono SUBITO, mentre il tap si sta spegnendo: è l'istante in cui la mano
+            // molla i tasti, ed è dove il difetto si nascondeva.
+            posta(.flagsChanged, code: 0x37, flags: [.maskControl, .maskAlternate])
+            posta(.flagsChanged, code: 0x3A, flags: [.maskControl])
+            posta(.flagsChanged, code: 0x3B, flags: [])
+
+            RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+
+            guard !schermo.isActive else { fail("la combinazione ⌃⌥⌘esc non ha chiuso la pulizia") }
+            // **Si guardano tutti e due gli stati**, e non è pignoleria: `combinedSessionState` è
+            // quello che il sistema mette dentro agli eventi, `hidSystemState` è quello che il
+            // WindowServer crede dei tasti fisici. Un tap che ingoia un rilascio può scollarli, e
+            // guardarne uno solo lascia passare metà dei modi di rompersi.
+            let sporchi: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand, .maskShift]
+            let restati = CGEventSource.flagsState(.combinedSessionState).intersection(sporchi)
+                .union(CGEventSource.flagsState(.hidSystemState).intersection(sporchi))
+            guard restati.isEmpty else {
+                fail("dopo l'uscita a mano il sistema tiene ancora premuto \(modifierNames(restati)): la tastiera è impazzita")
+            }
+            // **Cosa prova davvero questa riga, detto senza abbellirla.** Prova che la
+            // combinazione chiude la pulizia PASSANDO DAL TAP, che era la strada mai misurata.
+            // Sui modificatori invece è un guardiano, non una dimostrazione: provato il 2026-08-29
+            // rimettendo il comportamento vecchio (ingoia tutto), questo polo resta VERDE, perché
+            // ingoiare un `flagsChanged` non scolla né `combinedSessionState` né `hidSystemState`.
+            // Cioè: la causa dei «tasti impazziti» di quella sera NON è quella, e questa riga non
+            // deve essere letta come se l'avesse trovata.
+            print("  uscita a mano        → chiude passando dal tap, e nessun tasto resta premuto")
+        }
+
         print("✓ la pulizia si spegne da sola per tre strade indipendenti")
         exit(0)
     }

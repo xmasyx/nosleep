@@ -176,6 +176,12 @@ public enum S {
     public static let logWipeWatchdog = "pulizia chiusa dal cane da guardia: il timer non era scattato"
     public static let logWipeNoAX =
         "pulizia senza permesso di Accessibilità: i tasti funzione non sono bloccati"
+    /// Un modificatore era rimasto premuto per il sistema quando la pulizia si è chiusa. Riga rara
+    /// per costruzione: senza, di un guasto che si ripara da solo alla pressione dopo non resta
+    /// niente da leggere il giorno dopo.
+    public static func logWipeStuckModifiers(_ tasti: String) -> String {
+        "alla chiusura della pulizia il sistema teneva ancora premuto \(tasti): rimessi a zero"
+    }
     public static let logWipeSecureInput =
         "un'altra app tiene l'input protetto: i tasti non passano da noi e non possiamo bloccarli tutti"
 
