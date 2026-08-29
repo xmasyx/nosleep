@@ -121,7 +121,7 @@ struct LanguageTests {
 
     @Test("la stessa chiave produce davvero entrambi i poli")
     func realKeyUsesTaskLocalLanguage() {
-        #expect(L.$current.withValue(.en) { S.noWork } == "no active work")
+        #expect(L.$current.withValue(.en) { S.noWork } == "no jobs alive")
         #expect(L.$current.withValue(.it) { S.noWork } == "nessun lavoro attivo")
     }
 }

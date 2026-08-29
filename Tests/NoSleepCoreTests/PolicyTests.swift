@@ -75,7 +75,9 @@ struct PolicyThermalTests {
     @Test("ISC-22 — a `serious` molla tutto")
     func releasesAtSerious() {
         let c = Config(screenAwake: true, lidAwake: true)
-        let out = Policy.apply(.thermal(.serious), to: c)
+        let out = L.$current.withValue(.it) {
+            Policy.apply(.thermal(.serious), to: c)
+        }
         #expect(out.config.screenAwake == false)
         #expect(out.config.lidAwake == false)
         #expect(out.note?.contains("caldo") == true)
@@ -161,7 +163,9 @@ struct PolicyTemperatureTests {
     @Test("batteria oltre soglia: molla tutto")
     func hotBattery() {
         let c = Config(screenAwake: true, lidAwake: true)
-        let out = Policy.apply(.temperature(board: 40, battery: 46), to: c)
+        let out = L.$current.withValue(.it) {
+            Policy.apply(.temperature(board: 40, battery: 46), to: c)
+        }
         #expect(out.config.screenAwake == false)
         #expect(out.config.lidAwake == false)
         #expect(out.note?.contains("batteria") == true)
@@ -335,13 +339,16 @@ struct SleepWordsTests {
 
     @Test("i minuti interi sono detti in minuti, al singolare e al plurale")
     func wholeMinutes() {
-        #expect(S.sleepScheduled(60) == "va in sleep fra 1 minuto")
-        #expect(S.sleepScheduled(180) == "va in sleep fra 3 minuti")
+        #expect(L.$current.withValue(.it) { S.sleepScheduled(60) } == "va in sleep fra 1 minuto")
+        #expect(L.$current.withValue(.it) { S.sleepScheduled(180) } == "va in sleep fra 3 minuti")
+        #expect(L.$current.withValue(.en) { S.sleepScheduled(60) } == "goes to sleep in 1 minute")
+        #expect(L.$current.withValue(.en) { S.sleepScheduled(180) } == "goes to sleep in 3 minutes")
     }
 
     @Test("i secondi non interi restano secondi (polo negativo)")
     func nonWholeMinutesStaySeconds() {
-        #expect(S.sleepScheduled(61) == "va in sleep fra 61 secondi")
+        #expect(L.$current.withValue(.it) { S.sleepScheduled(61) } == "va in sleep fra 61 secondi")
+        #expect(L.$current.withValue(.en) { S.sleepScheduled(61) } == "goes to sleep in 61 seconds")
     }
 }
 
