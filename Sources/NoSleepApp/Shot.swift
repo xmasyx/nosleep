@@ -282,6 +282,100 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         exit(0)
     }
 
+    /// Il banco della soglia di batteria, **end-to-end**, con dentro il ritorno (2026-08-30).
+    ///
+    /// **Il difetto che prova.** Il 30/08 alle 00:13 il Mac era a batteria al 15% con tre
+    /// prenotazioni vive: la soglia ha mollato, giustamente. Riattaccata la corrente NoSleep è
+    /// rimasto spento per ore mentre i terminali lavoravano, perché l'automatismo del lavoro si arma
+    /// sul **fronte** zero → qualcosa prenotazioni, e quel conteggio non è più tornato a zero.
+    ///
+    /// I test puri provano la regola; questo prova il **cablaggio**: che l'app tenga la memoria del
+    /// debito fra un giro e l'altro, e che a riaccendersi siano le asserzioni vere e non solo la
+    /// configurazione. Fra i due c'è il difetto che i test puri non vedono, cioè la regola giusta
+    /// chiamata con gli argomenti sbagliati.
+    @MainActor static func checkBattery() -> Never {
+        let model = AppModel()
+        // Le altre due reti si mettono a tacere: un banco sulla batteria misura **la batteria**.
+        model.thermalSource = { .nominal }
+        model.temperatureSource = { .init(die: 40, board: 40, battery: 30) }
+
+        var carica: Int? = 80
+        var allaPresa = false
+        model.powerReadingSource = { (carica, allaPresa) }
+
+        // L'automatismo del lavoro va acceso a mano: alla nascita è spento, e questo banco esiste
+        // per provare cosa succede quando è acceso.
+        model.setAutoArm(true)
+
+        // Una prenotazione viva nella casa della sonda: è il «lavoro in corso» di tutto il banco.
+        let store = LeaseStore(directory: Paths.leases())
+        _ = store.hold(id: "banco-batteria", ttl: 3600, label: "Banco",
+                       now: Date().timeIntervalSince1970)
+
+        // 1. Il lavoro parte a carica piena: l'automatismo arma, e le asserzioni sono vere.
+        model.tickNow()
+        guard model.isActuallyHolding else {
+            print("✗ con un lavoro vivo e la batteria all'80% non tiene: il banco non misura la cosa giusta")
+            exit(1)
+        }
+        print("  80%, a batteria, lavoro vivo → tiene   (polo positivo)")
+
+        // 2. La carica scende ma resta sopra la soglia: NON deve mollare. Senza questo polo, un'app
+        //    che molla a ogni giro passerebbe il banco.
+        carica = 40
+        model.tickNow()
+        guard model.isActuallyHolding else {
+            print("✗ molla già al 40% con la soglia a 20: la soglia è sbagliata")
+            exit(1)
+        }
+        print("  40%                          → tiene   (polo negativo)")
+
+        // 3. Sotto la soglia: molla, ed è giusto che lo faccia.
+        carica = 12
+        model.tickNow()
+        guard !model.isActuallyHolding else {
+            print("✗ al 12% tiene ancora: la rete di sicurezza non agisce sulle asserzioni")
+            exit(1)
+        }
+        print("  12%                          → molla   (rete di sicurezza)")
+
+        // 4. **Il caso del 30/08.** Il lavoro continua e il conteggio non passa da zero: senza il
+        //    ritorno, qui l'app resta spenta per sempre.
+        model.tickNow()
+        guard !model.isActuallyHolding else {
+            print("✗ si è riacceso da solo mentre la soglia morde ancora")
+            exit(1)
+        }
+        print("  12%, altro giro              → resta spento (il fronte del lavoro non ricapita)")
+
+        // 5. Torna la corrente, sempre al 12%: chi ha spento deve riaccendere.
+        allaPresa = true
+        model.tickNow()
+        guard model.isActuallyHolding else {
+            print("✗ attaccata la corrente resta spento: è ESATTAMENTE il difetto del 30/08")
+            exit(1)
+        }
+        print("  12%, alla corrente           → riaccende (il ritorno)")
+
+        // 6. Polo negativo del debito: spento a MANO e poi la corrente va e viene. Deve restare
+        //    spento, altrimenti l'app combatte contro la sua mano.
+        model.setScreenAwake(false)
+        allaPresa = false
+        carica = 60
+        model.tickNow()
+        allaPresa = true
+        model.tickNow()
+        guard !model.isActuallyHolding else {
+            print("✗ si è riacceso dopo uno spegnimento a mano: il debito non è più suo")
+            exit(1)
+        }
+        print("  spento a mano, corrente      → resta spento (polo negativo del debito)")
+
+        _ = store.release(id: "banco-batteria")
+        print("✓ la soglia molla e RESTITUISCE, e restituisce solo ciò che ha preso lei")
+        exit(0)
+    }
+
     /// Il banco del coperchio che segue, **end-to-end**.
     ///
     /// I test puri provano la regola; questo prova il **cablaggio**, cioè che l'app tenga davvero il
@@ -699,6 +793,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             || CommandLine.arguments.contains("--selftest-horse")
             || wantsBarProbe
             || CommandLine.arguments.contains("--selftest-thermal")
+            || CommandLine.arguments.contains("--selftest-battery")
             || CommandLine.arguments.contains("--selftest-sleep")
             || CommandLine.arguments.contains("--selftest-lidfollow")
             || CommandLine.arguments.contains("--selftest-login")
@@ -737,6 +832,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest-icons") { Self.checkIcons() }
         if CommandLine.arguments.contains("--selftest-horse") { Self.checkHorse() }
         if CommandLine.arguments.contains("--selftest-thermal") { Self.checkThermal() }
+        if CommandLine.arguments.contains("--selftest-battery") { Self.checkBattery() }
         if CommandLine.arguments.contains("--selftest-sleep") { Self.checkSleep() }
         if CommandLine.arguments.contains("--selftest-lidfollow") { Self.checkLidFollow() }
         if CommandLine.arguments.contains("--selftest-login") { Self.checkLogin() }

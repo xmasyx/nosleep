@@ -276,6 +276,10 @@ public enum S {
     public static var releasedWorkDone: String {
         L.t(en: "turned off when the job ended", it: "disattivato, il lavoro è finito")
     }
+    public static var rearmedBattery: String {
+        L.t(en: "turned back on, the battery no longer blocks it and the job is still running",
+            it: "riattivato, la batteria non blocca più e il lavoro è ancora in corso")
+    }
     public static func releasedThermal(_ level: String) -> String {
         L.t(
             en: "turned off because the Mac is \(level) and the system is already slowing down",

@@ -86,6 +86,11 @@ else
     echo "▸ banco del limitatore termico…"
     "$ROOT/.build/release/NoSleepApp" --selftest-thermal
 
+    # La soglia di batteria, e soprattutto il suo RITORNO: molla sotto soglia e riaccende quando la
+    # corrente torna, perché il fronte del lavoro non ricapita mai (difetto vivo del 2026-08-30).
+    echo "▸ banco della soglia di batteria…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-battery
+
     # L'addormentamento provato end-to-end, con la sua condizione più importante: **mai** a coperchio
     # alzato.
     echo "▸ banco dell'addormentamento…"

@@ -5,6 +5,20 @@ something new arrives, the patch number when something already there gets fixed.
 
 ## Unreleased
 
+### The battery floor now gives back what it took
+
+- When the battery floor released the assertions, NoSleep stayed off even after the charger was
+  plugged back in. Auto-arm only fires on the **edge** from zero to some active leases, and a
+  release that happens *while* work is running never sends that count back to zero, so the edge
+  never came round again. Seen live on 2026-08-30: released at 15% with three live leases, still
+  off hours later with the terminals working.
+- The floor now remembers that it was the one that switched things off, and re-arms as soon as it
+  stops biting (charger back, or charge above the floor) while work is still running. It gives back
+  only what it took: a switch you turned off by hand stays off, and the thermal net keeps priority.
+- Power state is read at the **start** of each cycle instead of the end, so plugging in acts on this
+  cycle rather than the next one.
+- New end-to-end bench `--selftest-battery`, six poles, wired into the release script.
+
 ### Keyboard lock: releases are no longer swallowed, and the manual exit is finally on the bench
 
 - The tap swallowed **every** event, key releases and bare modifier transitions included. It now

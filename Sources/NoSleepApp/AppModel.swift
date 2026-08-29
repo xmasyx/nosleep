@@ -43,6 +43,12 @@ final class AppModel: ObservableObject {
     private let assertion = PowerAssertion()
     /// Com'era «tieni sveglio» all'ultimo giro, per riconoscere il fronte che arma il coperchio.
     private var screenAwakeWas = false
+    /// La soglia di batteria ha spento «tieni sveglio»? Solo allora possiamo riaccenderlo noi.
+    ///
+    /// Non va sul disco di proposito: se l'app si riavvia, il conteggio delle prenotazioni riparte
+    /// da zero e il fronte zero → qualcosa riaccende da sé. Un debito salvato servirebbe solo a
+    /// riaccendere per un ricordo di ieri.
+    private var batteryHeld = false
     /// Il coperchio acceso è opera nostra? Solo allora possiamo spegnerlo noi.
     private var lidArmedByUs = false
 
@@ -104,6 +110,13 @@ final class AppModel: ObservableObject {
     /// un banco che vuole provare UNA regola deve poter mettere a tacere le altre.
     var temperatureSource: () -> Thermometer.Reading = { Thermometer.read() }
 
+    /// Da dove vengono carica e presa di corrente. Iniettabile per la stessa ragione delle altre
+    /// due: il banco della soglia di batteria deve poter far scendere la carica e riattaccare la
+    /// spina, e nessuna delle due cose si può chiedere a un Mac vero dentro una prova.
+    var powerReadingSource: () -> (percent: Int?, onAC: Bool) = {
+        (PowerAssertion.batteryPercent(), PowerAssertion.isOnACPower())
+    }
+
     init() {
         Paths.ensureSupport()
         config = Config.load(from: Paths.config())
@@ -163,6 +176,14 @@ final class AppModel: ObservableObject {
 
     private func tick() {
         let now = Date().timeIntervalSince1970
+
+        // L'alimentazione si legge **all'inizio del giro**, non alla fine. Letta in coda, la
+        // decisione di questo giro girava sui valori del giro prima: attaccata la spina, la
+        // notifica di IOKit faceva partire un giro che quella spina non la vedeva ancora, e la
+        // riaccensione arrivava cinque secondi dopo un evento istantaneo.
+        let alimentazione = powerReadingSource()
+        onAC = alimentazione.onAC
+        batteryPercent = alimentazione.percent
         let vive = leases.alive(now: now)
         let count = vive.count
         let level = thermalSource()
@@ -184,7 +205,14 @@ final class AppModel: ObservableObject {
         // Il termico vince su tutto, e va valutato per primo: se il Mac scotta, il fatto che sia
         // appena partito un lavoro non deve poter riaccendere niente nello stesso giro.
         apply(.thermal(level))
+
+        // La soglia di batteria: prima si guarda se sta per mordere, perché dopo `apply` la
+        // configurazione è già cambiata e non si distinguerebbe più il suo spegnimento dal nostro.
+        let mordeva = Policy.batteryFloorBites(config, percent: batteryPercent, onAC: onAC)
+            && (config.screenAwake || config.lidAwake)
         apply(.battery(percent: batteryPercent, onAC: onAC))
+        if mordeva { batteryHeld = true }
+        applyBatteryReturn(leases: count, thermalBites: level.forcesRelease)
         if count != previousLeases.count {
             apply(.leases(from: previousLeases.count, to: count))
         }
@@ -260,6 +288,22 @@ final class AppModel: ObservableObject {
     }
 
 
+    /// Restituisce ciò che la soglia di batteria aveva preso, e solo quello.
+    private func applyBatteryReturn(leases: Int, thermalBites: Bool) {
+        let esito = Policy.batteryReturn(config: config,
+                                         percent: batteryPercent,
+                                         onAC: onAC,
+                                         leases: leases,
+                                         thermalBites: thermalBites,
+                                         held: batteryHeld)
+        batteryHeld = esito.held
+        guard esito.changed else { return }
+        config = esito.config
+        lastNote = esito.note
+        persist()
+        record(esito.note ?? "batteria")
+    }
+
     // ── Il coperchio che segue ───────────────────────────────────────────────
 
     /// Applica `Policy.lidFollow` e ne conserva la memoria.
@@ -298,8 +342,6 @@ final class AppModel: ObservableObject {
 
         helperInstalled = HelperControl.isInstalled
         lidAwakeReal = HelperControl.sleepDisabledNow() ?? false
-        onAC = PowerAssertion.isOnACPower()
-        batteryPercent = PowerAssertion.batteryPercent()
         // Si guarda solo quando NoSleep non tiene: è lì che «il Mac può dormire» rischia di essere
         // vero per noi e falso per il Mac.
         altri = isHolding ? [] : OtherHolders.current()
