@@ -18,7 +18,9 @@ public enum S {
     public static let headerHolding = "Il Mac resta sveglio"
     public static let headerIdle = "Il Mac può andare in sleep"
 
-    public static let noWork = "nessun lavoro attivo"
+    public static var noWork: String {
+        L.t(en: "no active work", it: "nessun lavoro attivo")
+    }
     public static let oneWork = "un lavoro attivo"
     public static func manyWork(_ n: Int) -> String { "\(n) lavori attivi" }
 
