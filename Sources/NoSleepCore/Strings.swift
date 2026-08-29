@@ -123,6 +123,7 @@ public enum S {
     public static let lidArmed = "coperchio pronto, puoi abbassare lo schermo"
     public static let lidDisarmed = "coperchio tornato come prima"
     public static func releasedBattery(_ p: Int) -> String { "disattivato, la batteria è al \(p)%" }
+    public static let rearmedBattery = "riattivato, la batteria non blocca più e il lavoro è ancora in corso"
     public static let releasedWorkDone = "disattivato, il lavoro è finito"
     public static func releasedThermal(_ level: String) -> String {
         "disattivato perché il Mac è \(level) e il sistema sta già rallentando"

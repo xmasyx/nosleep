@@ -488,3 +488,106 @@ struct LidFollowTests {
         #expect(e.config.lidAwake == false)
     }
 }
+
+/// Il ritorno dopo la soglia di batteria (2026-08-30, difetto visto dal vivo).
+///
+/// **Il caso vero.** Alle 00:13 il Mac era a batteria al 15% con tre prenotazioni vive: la rete di
+/// sicurezza ha mollato, giustamente. Riattaccata la corrente, NoSleep è rimasto spento mentre i
+/// terminali lavoravano, perché l'automatismo del lavoro si arma sul **fronte** zero → qualcosa e
+/// quel conteggio non è più tornato a zero. La riparazione non è un fronte in più: è che chi ha
+/// spento si ricordi di riaccendere.
+@Suite("Politica — la batteria restituisce ciò che ha preso")
+struct PolicyBatteryReturnTests {
+
+    /// Spento dalla soglia, con lavoro in corso: è lo stato in cui l'app si era piantata.
+    private var indebitato: Config {
+        var c = Config(screenAwake: false, lidAwake: false)
+        c.autoArmOnWork = true
+        return c
+    }
+
+    private func ritorno(_ c: Config, percent: Int?, onAC: Bool, leases: Int = 3,
+                         thermal: Bool = false, held: Bool = true) -> BatteryReturnOutcome {
+        Policy.batteryReturn(config: c, percent: percent, onAC: onAC,
+                             leases: leases, thermalBites: thermal, held: held)
+    }
+
+    @Test("la corrente torna e il lavoro c'è ancora: riaccende")
+    func onACRearms() {
+        let out = ritorno(indebitato, percent: 7, onAC: true)
+        #expect(out.config.screenAwake)
+        #expect(out.held == false)
+        #expect(out.note == S.rearmedBattery)
+    }
+
+    @Test("la carica risale sopra la soglia, ancora a batteria: riaccende lo stesso")
+    func chargeRecovered() {
+        #expect(ritorno(indebitato, percent: 40, onAC: false).config.screenAwake)
+    }
+
+    @Test("la soglia morde ancora: non riaccende e il debito resta (polo negativo)")
+    func stillBiting() {
+        let out = ritorno(indebitato, percent: 12, onAC: false)
+        #expect(out.changed == false)
+        #expect(out.config.screenAwake == false)
+        #expect(out.held, "il debito va tenuto finché la soglia morde")
+    }
+
+    @Test("senza debito non riaccende mai: uno spegnimento a mano resta spento (polo negativo)")
+    func neverWithoutDebt() {
+        let out = ritorno(indebitato, percent: 90, onAC: true, held: false)
+        #expect(out.changed == false)
+        #expect(out.config.screenAwake == false)
+    }
+
+    @Test("il Mac scotta: la rete termica passa davanti, il debito resta (polo negativo)")
+    func thermalWinsAndKeepsDebt() {
+        let out = ritorno(indebitato, percent: 90, onAC: true, thermal: true)
+        #expect(out.changed == false)
+        #expect(out.held, "raffreddandosi il debito con la batteria è ancora aperto")
+    }
+
+    @Test("nessun lavoro in corso: non riaccende, e il debito si consuma")
+    func noWorkConsumesDebt() {
+        let out = ritorno(indebitato, percent: 90, onAC: true, leases: 0)
+        #expect(out.changed == false)
+        #expect(out.held == false, "il fronte zero → qualcosa penserà al lavoro nuovo")
+    }
+
+    @Test("con l'automatismo spento non riaccende, e il debito si consuma (polo negativo)")
+    func autoArmOff() {
+        var c = indebitato; c.autoArmOnWork = false
+        let out = ritorno(c, percent: 90, onAC: true)
+        #expect(out.changed == false)
+        #expect(out.held == false)
+    }
+
+    @Test("riacceso a mano nel frattempo: non scrive niente e il debito si chiude")
+    func alreadyOnByHand() {
+        var c = indebitato; c.screenAwake = true
+        let out = ritorno(c, percent: 90, onAC: true)
+        #expect(out.changed == false)
+        #expect(out.held == false)
+    }
+
+    @Test("la catena intera del 30/08: molla al 15%, la corrente torna, riaccende")
+    func fullChain() {
+        var c = Config(screenAwake: true, lidAwake: true)
+        c.batteryFloor = 15
+        c.autoArmOnWork = true
+
+        // Tre prenotazioni vive, la carica tocca il pavimento.
+        #expect(Policy.batteryFloorBites(c, percent: 15, onAC: false))
+        let mollato = Policy.apply(.battery(percent: 15, onAC: false), to: c)
+        #expect(mollato.config.screenAwake == false)
+
+        // Il fronte del lavoro NON ricapita: le prenotazioni non sono mai passate da zero.
+        #expect(Policy.apply(.leases(from: 3, to: 4), to: mollato.config).changed == false,
+                "è questa la ragione per cui il Mac restava spento")
+
+        // La corrente torna: chi ha spento riaccende.
+        let out = ritorno(mollato.config, percent: 7, onAC: true, leases: 4)
+        #expect(out.config.screenAwake)
+        #expect(out.note == S.rearmedBattery)
+    }
+}
