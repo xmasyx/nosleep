@@ -3,7 +3,21 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
-## Unreleased
+## 1.2.0 — 2026-08-30
+
+### NoSleep speaks the language of your Mac
+
+- Every line you can read was Italian, hard-coded, on a repository whose README is English. The app
+  now follows the system language: English by default, Italian on an Italian Mac. Nothing was
+  dropped, Italian simply gained an English twin, and the strings live in one dictionary instead of
+  being scattered through the views.
+
+### The shipped binaries no longer say where they were built
+
+- The 1.1.0 zip carried the author's home directory inside all three binaries, in the Mach-O debug
+  map. The cause was not the build script: that release was built by hand, while the sibling apps
+  are built by CI. Releases now come from GitHub Actions on a tag, the debug map is stripped before
+  signing, and a fail-closed gate refuses to package a bundle that still carries an absolute path.
 
 ### The battery floor now gives back what it took
 
