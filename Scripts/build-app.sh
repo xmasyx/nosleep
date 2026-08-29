@@ -15,7 +15,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # temporanea e l'unica destinazione vera è /Applications (2026-08-07, sua segnalazione).
 DEST="${1:-${TMPDIR:-/tmp}/NoSleep-build}"
 APP="$DEST/NoSleep.app"
-VERSION="1.1.0"
+# Su un tag il tag È la versione: un binario libero di dichiararne un'altra mente proprio sulla
+# pagina del rilascio. In locale resta il numero corrente quando nessuno lo impone dall'esterno.
+VERSION="${NOSLEEP_VERSION:-1.1.0}"
 
 cd "$ROOT"
 
@@ -72,29 +74,38 @@ echo "▸ banco delle icone…"
 echo "▸ banco del cavallo…"
 "$ROOT/.build/release/NoSleepApp" --selftest-horse
 
-# Il limitatore termico provato end-to-end: non che la politica decida giusto, che l'app AGISCA.
-echo "▸ banco del limitatore termico…"
-"$ROOT/.build/release/NoSleepApp" --selftest-thermal
+# Questi banchi vogliono uno schermo vero, una tastiera vera e la gestione dell'energia di un Mac
+# vero; nessuno ha ancora provato quali sopravvivono su un runner GitHub. Una release rossa al tag
+# per una ragione che non è una regressione è peggio di un cancello in meno. Il giorno in cui una
+# corsa verde prova che il runner li regge, NOSLEEP_PURE_BENCHES esce dal workflow e questo ramo
+# torna a essere inutile.
+if [[ "${NOSLEEP_PURE_BENCHES:-0}" == "1" ]]; then
+    echo "⚠︎ SALTO --selftest-thermal, --selftest-sleep, --selftest-lidfollow, --selftest-wipe, --selftest-prefs: chiedono schermo, tastiera e gestione dell'energia reali"
+else
+    # Il limitatore termico provato end-to-end: non che la politica decida giusto, che l'app AGISCA.
+    echo "▸ banco del limitatore termico…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-thermal
 
-# L'addormentamento provato end-to-end, con la sua condizione più importante: **mai** a coperchio
-# alzato.
-echo "▸ banco dell'addormentamento…"
-"$ROOT/.build/release/NoSleepApp" --selftest-sleep
+    # L'addormentamento provato end-to-end, con la sua condizione più importante: **mai** a coperchio
+    # alzato.
+    echo "▸ banco dell'addormentamento…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-sleep
 
-# Il coperchio che segue «tieni sveglio», provato sul cablaggio e non solo sulla regola: il difetto
-# che i test puri non vedono è la regola giusta chiamata con gli argomenti sbagliati.
-echo "▸ banco del coperchio che segue…"
-"$ROOT/.build/release/NoSleepApp" --selftest-lidfollow
+    # Il coperchio che segue «tieni sveglio», provato sul cablaggio e non solo sulla regola: il difetto
+    # che i test puri non vedono è la regola giusta chiamata con gli argomenti sbagliati.
+    echo "▸ banco del coperchio che segue…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-lidfollow
 
-# La pulizia della tastiera, provata sull'unica cosa che conta davvero: si spegne da sola? Il polo
-# del cane da guardia gira col giro principale ucciso a mano, cioè nel caso in cui la tastiera
-# resterebbe bloccata. Accende la schermata nera per un paio di secondi: è voluto, è la prova.
-echo "▸ banco della pulizia della tastiera…"
-"$ROOT/.build/release/NoSleepApp" --selftest-wipe
+    # La pulizia della tastiera, provata sull'unica cosa che conta davvero: si spegne da sola? Il polo
+    # del cane da guardia gira col giro principale ucciso a mano, cioè nel caso in cui la tastiera
+    # resterebbe bloccata. Accende la schermata nera per un paio di secondi: è voluto, è la prova.
+    echo "▸ banco della pulizia della tastiera…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-wipe
 
-# Le Preferenze provate sulla trappola che Otium ha spedito: l'icona che resta nel Dock.
-echo "▸ banco delle Preferenze…"
-"$ROOT/.build/release/NoSleepApp" --selftest-prefs
+    # Le Preferenze provate sulla trappola che Otium ha spedito: l'icona che resta nel Dock.
+    echo "▸ banco delle Preferenze…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-prefs
+fi
 
 echo "▸ assemblo il bundle…"
 mkdir -p "$DEST"
@@ -117,6 +128,19 @@ if ! cmp -s "$ROOT/.build/release/NoSleepApp" "$APP/Contents/MacOS/NoSleep"; the
 fi
 chmod +x "$APP/Contents/Resources/install-helper.sh"
 cp "$ROOT/.build/NoSleep.icns" "$APP/Contents/Resources/NoSleep.icns"
+
+# La mappa di debug (`OSO`) porta il percorso assoluto della build dentro il binario: è esattamente
+# ciò che 1.1.0 ha spedito. Si spogliano le copie nel bundle, non gli originali in `.build/`, che
+# restano interi per il debug. L'ordine non si può invertire: strip invalida qualunque firma.
+echo "▸ tolgo le mappe di debug dai binari da spedire…"
+while IFS= read -r -d '' bin; do
+    [[ -x "$bin" ]] || continue
+    strip -S "$bin"
+done < <(find "$APP/Contents/MacOS" -type f -print0)
+
+# strip → cancello → firma: con `set -e` un percorso trovato ferma qui la build, così nessun
+# binario che racconta dove è nato arriva mai a essere firmato.
+bash "$ROOT/Scripts/check-paths.sh" "$APP" "$ROOT"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -197,25 +221,38 @@ fi
 #
 # Gli hook di Claude Code girano con il PATH dell'utente, non con quello del bundle: la CLI deve
 # stare su un percorso raggiungibile per nome. `~/.local/bin` è già nel suo PATH e non chiede root.
+# Una variabile chiamata "salta installazione" non può sovrascrivere proprio la CLI viva chiamata
+# dagli hook: il runner e le build di prova devono lasciare ferme entrambe le destinazioni.
 CLI_DIR="$HOME/.local/bin"
-mkdir -p "$CLI_DIR"
-cp "$ROOT/.build/release/nosleep" "$CLI_DIR/nosleep"
-chmod +x "$CLI_DIR/nosleep"
+if [[ "${NOSLEEP_SKIP_INSTALL:-0}" == "1" ]]; then
+    echo "▸ installazione della riga di comando saltata (NOSLEEP_SKIP_INSTALL=1)"
+else
+    mkdir -p "$CLI_DIR"
+    cp "$ROOT/.build/release/nosleep" "$CLI_DIR/nosleep"
+    chmod +x "$CLI_DIR/nosleep"
+fi
 
 # ── Pulizia delle copie che confondono la ricerca ────────────────────────────
 #
 # Una copia `.app` fuori da /Applications non sparisce cancellandola: macOS la tiene REGISTRATA in
 # LaunchServices per identificatore, e la registrazione sopravvive al file. Va tolta dal registro
-# per prima, altrimenti resta a produrre voci fantasma nella ricerca e avvisi al login.
+# per prima, altrimenti resta a produrre voci fantasma nella ricerca e avvisi al login. Quando
+# `dist/` è la destinazione richiesta dal rilascio, però, non è una copia vecchia: è il bundle
+# appena costruito e questo rastrello non deve mangiarlo.
 LSR=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-if [[ -d "$ROOT/dist/NoSleep.app" ]]; then
+if [[ "$DEST" != "$ROOT/dist" && -d "$ROOT/dist/NoSleep.app" ]]; then
     echo "▸ tolgo la vecchia copia in dist/ dal registro di macOS…"
     "$LSR" -u "$ROOT/dist/NoSleep.app" 2>/dev/null || true
     rm -rf "$ROOT/dist"
 fi
 
 echo "✓ pronto: $APP"
-echo "  riga di comando: $CLI_DIR/nosleep"
-echo "  installata: $INSTALLED"
-echo "  apri con:   open \"$INSTALLED\""
+# Il riepilogo dice quello che è successo davvero. Con l'installazione saltata, le due righe qui
+# sotto nominerebbero un'app in /Applications e una CLI in ~/.local/bin che questa corsa non ha
+# toccato: una ricevuta di un lavoro mai fatto, ed è il genere di riga che si crede sulla parola.
+if [[ "${NOSLEEP_SKIP_INSTALL:-0}" != "1" ]]; then
+    echo "  riga di comando: $CLI_DIR/nosleep"
+    echo "  installata: $INSTALLED"
+    echo "  apri con:   open \"$INSTALLED\""
+fi
 echo "  registro:   ~/Library/Application Support/NoSleep/log.jsonl"
