@@ -47,6 +47,12 @@ jobs:
         with:
           bun-version: latest
 
+      # `horse-frames.ts --check` legge le maschere PNG con ImageMagick. Il runner non ce l'ha, e
+      # senza questo passo la corsa muore in `leggiMaschera` (misurato: corsa 33280233175). Il
+      # controllo NON si salta: è quello che impedisce a `Horse.swift` di divergere dalle pose.
+      - name: Install ImageMagick
+        run: brew install imagemagick
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
