@@ -39,6 +39,14 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      # `build-app.sh` controlla con bun che `Horse.swift` corrisponda ancora alle maschere in
+      # `Scripts/cavallo/`. Un runner GitHub non ha bun, e senza questo passo la corsa muore con
+      # `bun: command not found` (misurato: corsa 33280152884 del 2026-08-29).
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
