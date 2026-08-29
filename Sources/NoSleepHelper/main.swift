@@ -22,7 +22,7 @@ func arg(_ name: String) -> String? {
 
 guard let uidString = arg("--uid"), let allowedUID = UInt32(uidString),
       let requestPath = arg("--request") else {
-    FileHandle.standardError.write(Data("nosleep-helper: servono --uid e --request\n".utf8))
+    FileHandle.standardError.write(Data((S.helperNeedsArguments + "\n").utf8))
     exit(2)
 }
 
@@ -78,7 +78,7 @@ func note(_ s: String) {
 // Se il Mac si è riavviato mentre `SleepDisabled` valeva 1, nessuno lo rimetterebbe a posto: il
 // primo atto del daemon è quindi riportarlo a 0, sempre, senza guardare la richiesta.
 
-note("avvio: porto SleepDisabled a 0 prima di leggere qualunque richiesta")
+note(S.helperResetAtStart)
 setSleepDisabled(false)
 var applied = false
 
@@ -111,10 +111,10 @@ while true {
         if setSleepDisabled(wanted) {
             applied = wanted
             note(wanted
-                 ? "sonno disattivato: l'app lo chiede e sta battendo"
-                 : "sonno riattivato: \(requestIsOwnedByAllowedUser() ? "richiesta caduta o battito fermo" : "nessuna richiesta valida")")
+                 ? S.helperSleepDisabled
+                 : S.helperSleepEnabled(requestOwned: requestIsOwnedByAllowedUser()))
         } else {
-            note("pmset ha fallito puntando a \(wanted ? 1 : 0)")
+            note(S.helperPmsetFailed(wanted ? 1 : 0))
         }
     }
 

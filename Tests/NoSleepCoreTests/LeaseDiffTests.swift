@@ -10,19 +10,25 @@ struct LeaseDiffTests {
 
     @Test("una prenotazione nuova scrive identificatore e durata")
     func taken() {
-        let events = LeaseDiff.events(before: [], after: [lease(id: "a", ttl: 20)], now: 90)
+        let events = L.$current.withValue(.it) {
+            LeaseDiff.events(before: [], after: [lease(id: "a", ttl: 20)], now: 90)
+        }
         #expect(events == ["prenotazione presa a (20 s)"])
     }
 
     @Test("una prenotazione sparita oltre la scadenza è scaduta")
     func expired() {
-        let events = LeaseDiff.events(before: [lease(id: "a", ttl: 20)], after: [], now: 101)
+        let events = L.$current.withValue(.it) {
+            LeaseDiff.events(before: [lease(id: "a", ttl: 20)], after: [], now: 101)
+        }
         #expect(events == ["prenotazione scaduta a"])
     }
 
     @Test("una prenotazione sparita prima della scadenza è restituita")
     func returned() {
-        let events = LeaseDiff.events(before: [lease(id: "a", ttl: 120)], after: [], now: 101)
+        let events = L.$current.withValue(.it) {
+            LeaseDiff.events(before: [lease(id: "a", ttl: 120)], after: [], now: 101)
+        }
         #expect(events == ["prenotazione restituita a"])
     }
 
@@ -37,7 +43,9 @@ struct LeaseDiffTests {
     func mixed() {
         let before = [lease(id: "a", ttl: 20), lease(id: "b", ttl: 120)]
         let after = [lease(id: "c", takenAt: 100, ttl: 30)]
-        let events = LeaseDiff.events(before: before, after: after, now: 101)
+        let events = L.$current.withValue(.it) {
+            LeaseDiff.events(before: before, after: after, now: 101)
+        }
         #expect(events == [
             "prenotazione presa c (30 s)",
             "prenotazione scaduta a",
@@ -47,7 +55,9 @@ struct LeaseDiffTests {
 
     @Test("esattamente alla scadenza non è più viva ed è scaduta")
     func expiryBoundary() {
-        let events = LeaseDiff.events(before: [lease(id: "a", ttl: 20)], after: [], now: 100)
+        let events = L.$current.withValue(.it) {
+            LeaseDiff.events(before: [lease(id: "a", ttl: 20)], after: [], now: 100)
+        }
         #expect(events == ["prenotazione scaduta a"])
     }
 }

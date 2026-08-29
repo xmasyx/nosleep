@@ -145,7 +145,7 @@ enum Rows {
             if !model.accessibilityGranted {
                 NSButton(title: S.wipeAxOpenSettings, s: s) { model.openAccessibilitySettings() }
             } else {
-                Text("attivo")
+                Text(S.accessibilityActive)
                     .font(.system(size: 11))
                     .foregroundStyle(Color(s.active))
             }

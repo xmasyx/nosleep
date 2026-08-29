@@ -46,7 +46,7 @@ final class PreferencesWindow: NSObject {
                           height: min(max(wanted.height, 300), limit.height - 40))
 
         let w = NSWindow(contentViewController: hosting)
-        w.title = "Preferenze di NoSleep"
+        w.title = S.settingsWindowTitle
         w.styleMask = [.titled, .closable, .miniaturizable]
         w.titlebarAppearsTransparent = true
         // Va DIETRO cambiando app, non sparisce: `hidesOnDeactivate` fa svanire le impostazioni che

@@ -99,17 +99,17 @@ struct MenuView: View {
         case 1: parts.append(S.oneWork)
         case let n: parts.append(S.manyWork(n))
         }
-        if model.thermal > .nominal { parts.append("Mac \(model.thermal.italian)") }
+        if model.thermal > .nominal { parts.append(S.macThermal(model.thermal.name)) }
         // I gradi si mostrano quando servono, cioè quando l'app sta tenendo qualcosa: a riposo
         // sarebbero un numero in più da leggere e nessuna decisione da prendere.
         if model.isHolding, let p = model.batteryPercent, !model.onAC {
-            parts.append("carica \(p)%")
+            parts.append(S.batteryCharge(p))
         }
         if model.isHolding, let b = model.temp.battery {
             // Si diceva «scocca», e non lo era: quel sensore sta due gradi dal die. Adesso si
             // chiama chip, che è quello che misura, e la batteria resta il numero che decide.
-            let chip = (model.temp.die ?? model.temp.board).map { String(format: ", chip %.0f°", $0) } ?? ""
-            parts.append(String(format: "batteria %.0f°%@", b, chip))
+            let chip = model.temp.die ?? model.temp.board
+            parts.append(S.batteryTemperatures(battery: b, chip: chip))
         }
         // Il disaccordo fra ciò che l'app vuole e ciò che il sistema fa si dice, non si nasconde.
         if model.config.lidAwake && !model.lidAwakeReal { parts.append(S.lidPending) }

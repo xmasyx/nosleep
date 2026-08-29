@@ -23,17 +23,7 @@ func fail(_ msg: String) -> Never {
     exit(1)
 }
 
-let usage = """
-nosleep — prenotazioni per NoSleep
-
-  nosleep hold --id <x> [--ttl <secondi>] [--label <testo>]
-  nosleep release --id <x>
-  nosleep status [--json]
-  nosleep list
-
-Una prenotazione dice «questo lavoro è vivo». Ha sempre una scadenza: se chi l'ha presa muore
-senza restituirla, scade da sola e il Mac torna a poter dormire.
-"""
+let usage = S.cliUsage
 
 guard args.count > 1 else { print(usage); exit(0) }
 
@@ -43,20 +33,20 @@ let now = Date().timeIntervalSince1970
 
 switch args[1] {
 case "hold":
-    guard let id = value("--id"), !id.isEmpty else { fail("serve --id") }
+    guard let id = value("--id"), !id.isEmpty else { fail(S.claimNeedsID) }
     // Sei ore di default: abbastanza per un lavoro lungo, poco abbastanza perché una sessione
     // morta non tenga sveglio il Mac per un giorno intero.
     let ttl = Double(value("--ttl") ?? "") ?? 21600
     let label = value("--label") ?? id
     guard store.hold(id: id, ttl: ttl, label: label, now: now) else {
-        fail("non sono riuscito a scrivere la prenotazione in \(Paths.leases().path)")
+        fail(S.claimWriteFailed(Paths.leases().path))
     }
-    print("prenotato \(id) per \(Int(ttl))s — vive: \(store.count(now: now))")
+    print(S.claimHeld(id, ttl: Int(ttl), alive: store.count(now: now)))
 
 case "release":
-    guard let id = value("--id"), !id.isEmpty else { fail("serve --id") }
+    guard let id = value("--id"), !id.isEmpty else { fail(S.claimNeedsID) }
     let existed = store.release(id: id)
-    print("\(existed ? "restituito" : "non c'era") \(id) — vive: \(store.count(now: now))")
+    print(S.claimReleased(id, existed: existed, alive: store.count(now: now)))
 
 case "status":
     let alive = store.alive(now: now)
@@ -69,23 +59,23 @@ case "status":
         print(String(data: data, encoding: .utf8)!)
     } else {
         switch alive.count {
-        case 0: print("nessun lavoro attivo")
-        case 1: print("un lavoro attivo")
-        case let n: print("\(n) lavori attivi")
+        case 0: print(S.noWork)
+        case 1: print(S.oneWork)
+        case let n: print(S.manyWork(n))
         }
     }
 
 case "list":
     let alive = store.alive(now: now)
-    if alive.isEmpty { print("nessuna prenotazione viva") }
+    if alive.isEmpty { print(S.noLiveClaims) }
     for l in alive {
         let left = Int(l.expires - now)
-        print("\(l.id)  \(l.label)  scade fra \(left)s")
+        print(S.liveClaim(l.id, label: l.label, secondsLeft: left))
     }
 
 case "-h", "--help", "help":
     print(usage)
 
 default:
-    fail("comando sconosciuto: \(args[1])\n\n\(usage)")
+    fail("\(S.unknownCommand(args[1]))\n\n\(usage)")
 }
