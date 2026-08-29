@@ -58,7 +58,7 @@ public enum Policy {
             var next = config
             next.screenAwake = false
             next.lidAwake = false
-            return PolicyOutcome(config: next, note: "disattivato perché \(motivo)")
+            return PolicyOutcome(config: next, note: S.releasedBecause(motivo))
 
         case .battery(let percent, let onAC):
             // A corrente la soglia non ha senso: la carica sale, non scende.
@@ -125,7 +125,7 @@ public enum Policy {
         var next = config
         next.screenAwake = false
         next.lidAwake = false
-        return PolicyOutcome(config: next, note: S.releasedThermal(level.italian))
+        return PolicyOutcome(config: next, note: S.releasedThermal(level.name))
     }
 
     private static func leases(from: Int, to: Int, _ config: Config) -> PolicyOutcome {

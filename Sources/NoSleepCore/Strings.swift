@@ -24,6 +24,8 @@ public enum S {
         L.t(en: "The Mac can sleep", it: "Il Mac può andare in sleep")
     }
 
+    // ── La riga di stato ────────────────────────────────────────────────────
+
     public static var noWork: String {
         L.t(en: "no jobs alive", it: "nessun lavoro attivo")
     }
@@ -32,6 +34,23 @@ public enum S {
     }
     public static func manyWork(_ n: Int) -> String {
         L.t(en: "\(n) jobs alive", it: "\(n) lavori attivi")
+    }
+
+    public static func macThermal(_ level: String) -> String {
+        L.t(en: "Mac \(level)", it: "Mac \(level)")
+    }
+    public static func batteryCharge(_ percent: Int) -> String {
+        L.t(en: "charge \(percent)%", it: "carica \(percent)%")
+    }
+    /// Batteria e chip sono una misura sola agli occhi di chi legge: tenerli insieme evita che la
+    /// punteggiatura della frase finisca nella vista.
+    public static func batteryTemperatures(battery: Double, chip: Double?) -> String {
+        let batteryText = String(
+            format: L.t(en: "battery %.0f°", it: "batteria %.0f°"),
+            battery
+        )
+        guard let chip else { return batteryText }
+        return batteryText + String(format: ", chip %.0f°", chip)
     }
 
     public static var lidPending: String {
@@ -197,6 +216,12 @@ public enum S {
     public static var wipeAxOpenSettings: String {
         L.t(en: "Open System Settings", it: "Apri Impostazioni di Sistema")
     }
+    public static var accessibilityActive: String {
+        L.t(en: "active", it: "attivo")
+    }
+    public static var noModifiers: String {
+        L.t(en: "none", it: "nessuno")
+    }
 
     // ── Piede ────────────────────────────────────────────────────────────────
 
@@ -226,6 +251,9 @@ public enum S {
     public static var preferencesButton: String {
         L.t(en: "Settings", it: "Preferenze")
     }
+    public static var settingsWindowTitle: String {
+        L.t(en: "NoSleep Settings", it: "Preferenze di NoSleep")
+    }
     public static var quitButton: String {
         L.t(en: "Turn off and quit", it: "Disattiva e chiudi")
     }
@@ -253,6 +281,33 @@ public enum S {
             en: "turned off because the Mac is \(level) and the system is already slowing down",
             it: "disattivato perché il Mac è \(level) e il sistema sta già rallentando"
         )
+    }
+    public static func releasedBecause(_ reason: String) -> String {
+        L.t(en: "turned off because \(reason)", it: "disattivato perché \(reason)")
+    }
+    public static func batteryTemperatureReason(_ degrees: Double) -> String {
+        String(
+            format: L.t(
+                en: "the battery is at %.0f degrees",
+                it: "la batteria è a %.0f gradi"
+            ),
+            degrees
+        )
+    }
+
+    // ── I livelli termici ───────────────────────────────────────────────────
+
+    public static var thermalNormal: String {
+        L.t(en: "normal", it: "normale")
+    }
+    public static var thermalWarm: String {
+        L.t(en: "warm", it: "tiepido")
+    }
+    public static var thermalHot: String {
+        L.t(en: "hot", it: "caldo")
+    }
+    public static var thermalCritical: String {
+        L.t(en: "critical", it: "critico")
     }
 
     // ── Il registro ──────────────────────────────────────────────────────────
@@ -389,6 +444,131 @@ public enum S {
             en: "another app is using secure input, so the keys bypass NoSleep and cannot all be blocked",
             it: "un'altra app tiene l'input protetto: i tasti non passano da noi e non possiamo bloccarli tutti"
         )
+    }
+
+    // ── La riga di comando ──────────────────────────────────────────────────
+
+    public static var cliUsage: String {
+        L.t(
+            en: """
+            nosleep — claims for NoSleep
+
+              nosleep hold --id <x> [--ttl <seconds>] [--label <text>]
+              nosleep release --id <x>
+              nosleep status [--json]
+              nosleep list
+
+            A claim means "this job is alive". It always has an expiry: if whoever took it dies
+            without releasing it, it expires on its own and the Mac can sleep again.
+            """,
+            it: """
+            nosleep — prenotazioni per NoSleep
+
+              nosleep hold --id <x> [--ttl <secondi>] [--label <testo>]
+              nosleep release --id <x>
+              nosleep status [--json]
+              nosleep list
+
+            Una prenotazione dice «questo lavoro è vivo». Ha sempre una scadenza: se chi l'ha presa muore
+            senza restituirla, scade da sola e il Mac torna a poter dormire.
+            """
+        )
+    }
+    public static var claimNeedsID: String {
+        L.t(en: "--id is required", it: "serve --id")
+    }
+    public static func claimWriteFailed(_ path: String) -> String {
+        L.t(
+            en: "could not write the claim to \(path)",
+            it: "non sono riuscito a scrivere la prenotazione in \(path)"
+        )
+    }
+    public static func claimHeld(_ id: String, ttl: Int, alive: Int) -> String {
+        L.t(
+            en: "held \(id) for \(ttl)s — alive: \(alive)",
+            it: "prenotato \(id) per \(ttl)s — vive: \(alive)"
+        )
+    }
+    public static func claimReleased(_ id: String, existed: Bool, alive: Int) -> String {
+        let result = existed
+            ? L.t(en: "released", it: "restituito")
+            : L.t(en: "was not there", it: "non c'era")
+        return L.t(
+            en: "\(result) \(id) — alive: \(alive)",
+            it: "\(result) \(id) — vive: \(alive)"
+        )
+    }
+    public static var noLiveClaims: String {
+        L.t(en: "no live claims", it: "nessuna prenotazione viva")
+    }
+    public static func liveClaim(_ id: String, label: String, secondsLeft: Int) -> String {
+        L.t(
+            en: "\(id)  \(label)  expires in \(secondsLeft)s",
+            it: "\(id)  \(label)  scade fra \(secondsLeft)s"
+        )
+    }
+    public static func unknownCommand(_ command: String) -> String {
+        L.t(en: "unknown command: \(command)", it: "comando sconosciuto: \(command)")
+    }
+
+    // ── Il daemon ───────────────────────────────────────────────────────────
+
+    public static var helperNeedsArguments: String {
+        L.t(
+            en: "nosleep-helper: --uid and --request are required",
+            it: "nosleep-helper: servono --uid e --request"
+        )
+    }
+    public static var helperResetAtStart: String {
+        L.t(
+            en: "starting: setting SleepDisabled to 0 before reading any request",
+            it: "avvio: porto SleepDisabled a 0 prima di leggere qualunque richiesta"
+        )
+    }
+    public static var helperSleepDisabled: String {
+        L.t(
+            en: "sleep disabled: the app is requesting it and its heartbeat is alive",
+            it: "sonno disattivato: l'app lo chiede e sta battendo"
+        )
+    }
+    public static func helperSleepEnabled(requestOwned: Bool) -> String {
+        let reason = requestOwned
+            ? L.t(
+                en: "request dropped or heartbeat stopped",
+                it: "richiesta caduta o battito fermo"
+            )
+            : L.t(en: "no valid request", it: "nessuna richiesta valida")
+        return L.t(
+            en: "sleep enabled: \(reason)",
+            it: "sonno riattivato: \(reason)"
+        )
+    }
+    public static func helperPmsetFailed(_ value: Int) -> String {
+        L.t(
+            en: "pmset failed setting SleepDisabled to \(value)",
+            it: "pmset ha fallito puntando a \(value)"
+        )
+    }
+
+    // ── L'installazione dell'helper ─────────────────────────────────────────
+
+    public static var helperInstallScriptMissing: String {
+        L.t(
+            en: "the install script is not in the bundle",
+            it: "lo script di installazione non è nel bundle"
+        )
+    }
+    public static var helperScriptMissing: String {
+        L.t(en: "the script is not in the bundle", it: "lo script non è nel bundle")
+    }
+    public static var cannotLaunchOsascript: String {
+        L.t(en: "could not launch osascript", it: "non riesco a lanciare osascript")
+    }
+    public static var helperPartlyInstalled: String {
+        L.t(en: "only partly installed", it: "installato a metà")
+    }
+    public static var helperRemovalFailed: String {
+        L.t(en: "removal failed", it: "rimozione fallita")
     }
 
     public static var installCancelled: String {

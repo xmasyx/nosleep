@@ -125,7 +125,7 @@ func modifierNames(_ f: CGEventFlags) -> String {
     if f.contains(.maskCommand) { n.append("⌘") }
     if f.contains(.maskShift) { n.append("⇧") }
     if f.contains(.maskSecondaryFn) { n.append("fn") }
-    return n.isEmpty ? "nessuno" : n.joined(separator: "")
+    return n.isEmpty ? S.noModifiers : n.joined(separator: "")
 }
 
 /// Una finestra senza bordi non diventa mai la finestra di tastiera, e senza quello i tasti
@@ -208,7 +208,7 @@ final class WipeScreen: ObservableObject {
                             screenAwake: false,
                             lidAwake: false,
                             leases: 0,
-                            thermal: "normale"),
+                            thermal: ThermalLevel.nominal.logKey),
                    to: Paths.log())
     }
 

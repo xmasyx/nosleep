@@ -24,12 +24,23 @@ public enum ThermalLevel: Int, Comparable, Sendable, Codable {
 
     public var forcesRelease: Bool { self >= ThermalLevel.releaseThreshold }
 
-    public var italian: String {
+    /// Chiave del campo `thermal` in `log.jsonl`: è congelata apposta, perché righe scritte in
+    /// lingue e mesi diversi devono restare confrontabili byte per byte.
+    public var logKey: String {
         switch self {
         case .nominal: return "normale"
         case .fair: return "tiepido"
         case .serious: return "caldo"
         case .critical: return "critico"
+        }
+    }
+
+    public var name: String {
+        switch self {
+        case .nominal: return S.thermalNormal
+        case .fair: return S.thermalWarm
+        case .serious: return S.thermalHot
+        case .critical: return S.thermalCritical
         }
     }
 
@@ -78,7 +89,7 @@ public enum Temperature {
     public static func exceeded(board: Double?, battery: Double?) -> String? {
         _ = board
         if let b = battery, b >= batteryCeiling {
-            return String(format: "la batteria è a %.0f gradi", b)
+            return S.batteryTemperatureReason(b)
         }
         return nil
     }

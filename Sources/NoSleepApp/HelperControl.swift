@@ -62,7 +62,7 @@ enum HelperControl {
     /// di quoting, e qui quel difetto girerebbe da root.
     static func install() -> InstallResult {
         guard let script = Bundle.main.url(forResource: "install-helper", withExtension: "sh") else {
-            return .failed("lo script di installazione non è nel bundle")
+            return .failed(S.helperInstallScriptMissing)
         }
         let uid = getuid()
         let request = Paths.request().path
@@ -79,11 +79,11 @@ enum HelperControl {
         let err = Pipe()
         p.standardError = err
         p.standardOutput = FileHandle.nullDevice
-        do { try p.run() } catch { return .failed("non riesco a lanciare osascript") }
+        do { try p.run() } catch { return .failed(S.cannotLaunchOsascript) }
         let errText = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         p.waitUntilExit()
 
-        if p.terminationStatus == 0 { return isInstalled ? .installed : .failed("installato a metà") }
+        if p.terminationStatus == 0 { return isInstalled ? .installed : .failed(S.helperPartlyInstalled) }
         // -128 è il codice con cui AppleScript dice «l'utente ha annullato».
         if errText.contains("-128") { return .cancelled }
         return .failed(errText.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -91,7 +91,7 @@ enum HelperControl {
 
     static func uninstall() -> InstallResult {
         guard let script = Bundle.main.url(forResource: "install-helper", withExtension: "sh") else {
-            return .failed("lo script non è nel bundle")
+            return .failed(S.helperScriptMissing)
         }
         let cmd = "'\(script.path)' --remove"
         let osa = "do shell script \"\(cmd)\" with administrator privileges"
@@ -100,8 +100,8 @@ enum HelperControl {
         p.arguments = ["-e", osa]
         p.standardError = FileHandle.nullDevice
         p.standardOutput = FileHandle.nullDevice
-        do { try p.run() } catch { return .failed("non riesco a lanciare osascript") }
+        do { try p.run() } catch { return .failed(S.cannotLaunchOsascript) }
         p.waitUntilExit()
-        return p.terminationStatus == 0 ? .installed : .failed("rimozione fallita")
+        return p.terminationStatus == 0 ? .installed : .failed(S.helperRemovalFailed)
     }
 }

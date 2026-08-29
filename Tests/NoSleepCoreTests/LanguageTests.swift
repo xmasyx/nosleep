@@ -124,4 +124,22 @@ struct LanguageTests {
         #expect(L.$current.withValue(.en) { S.noWork } == "no jobs alive")
         #expect(L.$current.withValue(.it) { S.noWork } == "nessun lavoro attivo")
     }
+
+    @Test("i livelli termici mostrati cambiano lingua, le chiavi del registro no")
+    func thermalNamesAndLogKeysStaySeparate() {
+        #expect(L.$current.withValue(.en) { ThermalLevel.fair.name } == "warm")
+        #expect(L.$current.withValue(.it) { ThermalLevel.fair.name } == "tiepido")
+        #expect(L.$current.withValue(.en) { ThermalLevel.fair.logKey } == "tiepido")
+        #expect(L.$current.withValue(.it) { ThermalLevel.fair.logKey } == "tiepido")
+    }
+
+    @Test("la riga di comando e il daemon hanno davvero entrambi i poli")
+    func cliAndHelperUseTaskLocalLanguage() {
+        #expect(L.$current.withValue(.en) { S.cliUsage }.hasPrefix("nosleep — claims for NoSleep"))
+        #expect(L.$current.withValue(.it) { S.cliUsage }.hasPrefix("nosleep — prenotazioni per NoSleep"))
+        #expect(L.$current.withValue(.en) { S.helperSleepEnabled(requestOwned: false) }
+                == "sleep enabled: no valid request")
+        #expect(L.$current.withValue(.it) { S.helperSleepEnabled(requestOwned: false) }
+                == "sonno riattivato: nessuna richiesta valida")
+    }
 }

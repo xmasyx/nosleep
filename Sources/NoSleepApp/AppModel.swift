@@ -200,15 +200,15 @@ final class AppModel: ObservableObject {
 
     private func apply(_ event: PolicyEvent) {
         let outcome = Policy.apply(event, to: config)
-        guard outcome.changed else { return }
+        guard let note = outcome.note else { return }
         config = outcome.config
-        lastNote = outcome.note
+        lastNote = note
         persist()
-        record(outcome.note ?? "cambio")
+        record(note)
 
         // Se a mollare la presa è stata la **fine del lavoro** e il coperchio è abbassato, mollare
         // non basta: qualcun altro può tenere sveglio il Mac per ore mentre lui non può vederlo.
-        if outcome.note == S.releasedWorkDone { armPendingSleep() }
+        if note == S.releasedWorkDone { armPendingSleep() }
     }
 
     // ── Addormentare davvero ─────────────────────────────────────────────────
@@ -276,11 +276,11 @@ final class AppModel: ObservableObject {
                                      helperInstalled: helperInstalled)
         lidArmedByUs = esito.armed
         screenAwakeWas = config.screenAwake
-        guard esito.changed else { return }
+        guard let note = esito.note else { return }
         config = esito.config
-        lastNote = esito.note
+        lastNote = note
         persist()
-        record(esito.note ?? "coperchio")
+        record(note)
     }
 
     /// Allinea il mondo alla configurazione, e rilegge dal mondo ciò che il mondo sa meglio di noi.
@@ -482,7 +482,7 @@ final class AppModel: ObservableObject {
                             screenAwake: config.screenAwake,
                             lidAwake: config.lidAwake,
                             leases: leaseCount,
-                            thermal: thermal.italian,
+                            thermal: thermal.logKey,
                             board: temp.board,
                             battery: temp.battery,
                             others: altri.prefix(3).map(\.process)),
