@@ -216,6 +216,7 @@ if [[ "${NOSLEEP_SKIP_INSTALL:-0}" == "1" ]]; then
 elif pgrep -f "^$INSTALLED/Contents/MacOS/NoSleep( |\$)" >/dev/null; then
     echo "⚠︎ NoSleep è in esecuzione da $INSTALLED — esci dall'app e rilancia questo script"
     echo "  (il bundle nuovo resta pronto in $APP)"
+    INSTALL_SKIPPED_RUNNING=1
 else
     echo "▸ installo in ${INSTALLED}…"
     rm -rf "$INSTALLED"
@@ -257,7 +258,13 @@ echo "✓ pronto: $APP"
 # toccato: una ricevuta di un lavoro mai fatto, ed è il genere di riga che si crede sulla parola.
 if [[ "${NOSLEEP_SKIP_INSTALL:-0}" != "1" ]]; then
     echo "  riga di comando: $CLI_DIR/nosleep"
-    echo "  installata: $INSTALLED"
-    echo "  apri con:   open \"$INSTALLED\""
+    # E se l'app girava, l'installazione è stata saltata sopra: dirla fatta qui è la ricevuta
+    # falsa che ha fatto credere a un verificatore di aver installato (30/08, visto da un'altra chat).
+    if [[ "${INSTALL_SKIPPED_RUNNING:-0}" == "1" ]]; then
+        echo "  NON installata: $INSTALLED è quella di prima, l'app girava (il bundle nuovo è $APP)"
+    else
+        echo "  installata: $INSTALLED"
+        echo "  apri con:   open \"$INSTALLED\""
+    fi
 fi
 echo "  registro:   ~/Library/Application Support/NoSleep/log.jsonl"
