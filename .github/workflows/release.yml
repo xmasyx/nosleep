@@ -121,6 +121,26 @@ jobs:
 
       # A signed directory can still be incomplete. Each missing promise gets its own error so a
       # red release says which contract broke instead of asking somebody to infer it from `test`.
+      # `Authority=<Nome> Dev` è un controllo sul NOME, e un altro certificato autofirmato con lo
+      # stesso Common Name lo supererebbe: macOS non guarda la stringa, guarda il designated
+      # requirement, e un'identità diversa azzera i permessi TCC già concessi (Accessibilità,
+      # microfono). Qui l'impronta della foglia è fissata a quella dell'identità vera, letta
+      # dall'app firmata. Rilievo dell'audit cross-vendor del 2026-08-30; due poli misurati:
+      # exit 0 contro la propria identità, exit 3 contro un'impronta diversa.
+      - name: Pin the signing identity
+        run: |
+          APP="dist/NoSleep.app"
+          REQ='identifier "app.nosleep.mac" and certificate leaf = H"d93387f7f9a8592bb960bd0177c03a31c9c59e2f"'
+          codesign --verify --strict -R="$REQ" "$APP" \
+            || { echo "::error::il bundle non soddisfa il designated requirement fissato: un certificato diverso azzererebbe i permessi gia concessi"; exit 1; }
+
+      # La logica del tasto nei sorgenti non prova che il binario SPEDITO lo esponga: fino al
+      # 2026-08-30 le tre release pubblicate non lo contenevano, e nessun cancello lo diceva.
+      - name: The published binary carries the update button
+        run: |
+          strings "dist/NoSleep.app/Contents/MacOS/NoSleep" | grep -qF 'Check for updates' \
+            || { echo "::error::il binario non contiene il tasto di aggiornamento"; exit 1; }
+
       - name: Verify the bundle
         run: |
           APP="$PWD/dist/NoSleep.app"
