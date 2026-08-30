@@ -3,6 +3,15 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
+## Unreleased
+
+### The panel updates the app
+
+- A **Check for updates** button in the panel asks GitHub for the latest release (once a day on
+  launch as well, never blocking). Installed through Homebrew, the app runs `brew upgrade` for
+  you, clears the quarantine flag on the new copy and relaunches; installed by hand, it opens the
+  release page. NoSleep is now on the `xmasyx/tap` Homebrew tap.
+
 ## 1.2.0 — 2026-08-30
 
 ### NoSleep speaks the language of your Mac
