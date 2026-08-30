@@ -40,6 +40,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var batteryPercent: Int?
     @Published private(set) var launchesAtLogin: Bool = false
 
+    /// Nasce insieme al modello ma resta pigro, così può richiamare l'uscita pulita senza creare
+    /// un secondo proprietario dello stato dell'app.
+    lazy var updater = Updater(model: self)
+
     private let assertion = PowerAssertion()
     /// Com'era «tieni sveglio» all'ultimo giro, per riconoscere il fronte che arma il coperchio.
     private var screenAwakeWas = false
@@ -146,6 +150,9 @@ final class AppModel: ObservableObject {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.lastWake = Date().timeIntervalSince1970 }
+        }
+        if !ShotDelegate.isProbe {
+            DispatchQueue.main.async { [weak self] in self?.updater.checkIfDue() }
         }
     }
 

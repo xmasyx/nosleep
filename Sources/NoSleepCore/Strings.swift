@@ -258,6 +258,54 @@ public enum S {
         L.t(en: "Turn off and quit", it: "Disattiva e chiudi")
     }
 
+    // ── Aggiornamenti ───────────────────────────────────────────────────────
+
+    public static var checkUpdatesButton: String {
+        L.t(en: "Check for updates", it: "Verifica aggiornamenti")
+    }
+    public static var updatesChecking: String {
+        L.t(en: "Checking…", it: "Controllo…")
+    }
+    public static func updatesUpToDate(_ current: String) -> String {
+        L.t(en: "Up to date, \(current)", it: "Aggiornata, \(current)")
+    }
+    public static func updatesAvailable(_ version: String) -> String {
+        L.t(en: "There's \(version)", it: "C'è la \(version)")
+    }
+    public static var updatesUpgradeButton: String {
+        L.t(en: "Update and relaunch", it: "Aggiorna e riavvia")
+    }
+    public static var updatesDownloadButton: String {
+        L.t(en: "Download", it: "Scarica")
+    }
+    public static var updatesPreparing: String {
+        L.t(en: "Preparing Homebrew…", it: "Preparo Homebrew…")
+    }
+    public static var updatesBrewMissing: String {
+        L.t(
+            en: "Homebrew is not available; download the release instead.",
+            it: "Homebrew non è disponibile; scarica invece la versione nuova."
+        )
+    }
+    public static var updatesProcessFailed: String {
+        L.t(en: "Homebrew stopped without a reason", it: "Homebrew si è fermato senza una ragione")
+    }
+    public static var updatesInvalidURL: String {
+        L.t(en: "invalid update URL", it: "indirizzo degli aggiornamenti non valido")
+    }
+    public static var updatesBadResponse: String {
+        L.t(
+            en: "the update server returned an error",
+            it: "il servizio degli aggiornamenti ha restituito un errore"
+        )
+    }
+    public static var updatesReleaseWithoutTag: String {
+        L.t(
+            en: "the release has no version tag",
+            it: "alla versione pubblicata manca il numero"
+        )
+    }
+
 
     // ── Le righe che l'app scrive da sola ────────────────────────────────────
 
@@ -338,6 +386,18 @@ public enum S {
     }
     public static var logQuit: String {
         L.t(en: "turned everything off on quit", it: "chiusura, disattivato tutto")
+    }
+    public static func logUpdateCheckFailed(_ reason: String) -> String {
+        L.t(
+            en: "update check failed: \(reason)",
+            it: "controllo aggiornamenti non riuscito: \(reason)"
+        )
+    }
+    public static func logUpdateQuarantineKept(_ reason: String) -> String {
+        L.t(
+            en: "updated, but the quarantine flag stayed on the new copy: \(reason)",
+            it: "aggiornata, ma il contrassegno di quarantena è rimasto sulla copia nuova: \(reason)"
+        )
     }
     public static var logSleepScheduled: String {
         L.t(

@@ -38,8 +38,25 @@ claim expires.
 
 ## Install
 
-Two ways in. The zip is quicker; building from source is what most people reading this will do
-anyway, and it is the only path that needs no ritual.
+Homebrew is the shortest path:
+
+```sh
+brew install --cask xmasyx/tap/nosleep
+xattr -dr com.apple.quarantine /Applications/NoSleep.app   # once: the app is not notarized
+```
+
+The second line is needed once, because NoSleep is signed with its own stable certificate and not
+notarized by Apple: without it macOS refuses to open the app (System Settings → Privacy & Security
+→ *Open Anyway* does the same thing). From then on NoSleep updates from its own panel with
+**Check for updates**: it runs `brew upgrade`, clears the flag on the new copy and relaunches.
+If you installed a zip by hand, move to the Homebrew build with:
+
+```sh
+brew install --cask --force xmasyx/tap/nosleep
+```
+
+The zip and source routes remain below; building from source is the only path that needs no
+Gatekeeper ritual.
 
 ### Download the app
 

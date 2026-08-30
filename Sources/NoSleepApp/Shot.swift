@@ -799,6 +799,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             || CommandLine.arguments.contains("--selftest-login")
             || CommandLine.arguments.contains("--selftest-prefs")
             || CommandLine.arguments.contains("--selftest-wipe")
+            || CommandLine.arguments.contains("--bench-updates")
     }
 
     static func sandbox() -> URL {
@@ -828,6 +829,10 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         // resta quella già scritta in `Paths.homeOverride`: chi costruisce l'oggetto vero deve
         // prima dirottarne lo stato.
         if Self.isProbe { Paths.homeOverride = Self.sandbox() }
+
+        if CommandLine.arguments.contains("--bench-updates") {
+            return
+        }
 
         if CommandLine.arguments.contains("--selftest-icons") { Self.checkIcons() }
         if CommandLine.arguments.contains("--selftest-horse") { Self.checkHorse() }
