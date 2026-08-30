@@ -3,7 +3,7 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
-## Unreleased
+## 1.3.0 — 2026-08-30
 
 ### The panel updates the app
 
