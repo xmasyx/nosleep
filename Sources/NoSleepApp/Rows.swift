@@ -157,4 +157,56 @@ enum Rows {
             NSSwitch(isOn: model.launchesAtLogin, s: s) { model.setLaunchAtLogin($0) }
         }
     }
+
+    static func updates(model: AppModel, s: SurfacePalette) -> some View {
+        UpdatesRow(updater: model.updater, s: s)
+    }
+}
+
+/// Gli aggiornamenti, **in Preferenze e non più nel pannello** (sua richiesta, 31/08: «il verifica
+/// aggiornamenti lo metterai all'interno di preferenze, così risulta più piccolo»).
+///
+/// **È una `struct` e non una funzione statica come le altre righe**, e non è una scelta di stile:
+/// lo stato vive nell'`Updater`, non nell'`AppModel`, quindi una vista che osservasse solo il
+/// modello resterebbe ferma su «Controllo…» mentre la risposta arriva. Osservando l'`Updater` la
+/// riga si muove da sola.
+///
+/// La nota dice che il controllo è **automatico**: senza quella frase un bottone da solo fa
+/// credere che senza premerlo non ci si accorga mai di una versione nuova, che è il contrario di
+/// come funziona.
+struct UpdatesRow: View {
+    @ObservedObject var updater: Updater
+    let s: SurfacePalette
+
+    var body: some View {
+        NSRow(title: S.updatesTitle, note: nota, s: s) {
+            switch updater.state {
+            case .available(_, let action):
+                switch action {
+                case .upgradeAndRelaunch:
+                    NSButton(title: S.updatesUpgradeButton, s: s) { updater.perform(action) }
+                case .openReleasePage:
+                    NSButton(title: S.updatesDownloadButton, s: s) { updater.perform(action) }
+                }
+            case .checking, .upgrading:
+                // Niente bottone mentre sta già lavorando: premerlo di nuovo ripartirebbe da capo.
+                EmptyView()
+            case .idle, .upToDate, .failed:
+                NSButton(title: S.checkUpdatesButton, s: s) { updater.checkNow() }
+            }
+        }
+    }
+
+    /// Lo stato per esteso vive qui, dove uno viene apposta a chiederlo. Nel pannello resta solo
+    /// ciò che richiede una decisione.
+    private var nota: String {
+        switch updater.state {
+        case .idle: return S.updatesNote
+        case .checking: return S.updatesChecking
+        case .upToDate(let current): return S.updatesUpToDate(current) + " · " + S.updatesNote
+        case .available(let version, _): return S.updatesAvailable(version)
+        case .upgrading(let line): return line
+        case .failed(let reason): return reason
+        }
+    }
 }

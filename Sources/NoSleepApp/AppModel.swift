@@ -149,7 +149,18 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.lastWake = Date().timeIntervalSince1970 }
+            Task { @MainActor in
+                guard let self else { return }
+                self.lastWake = Date().timeIntervalSince1970
+                // **Anche al risveglio, non solo all'avvio** (31/08). `checkIfDue` girava una
+                // volta sola, in `start()`: su un Mac che si chiude e si riapre invece di
+                // riavviarsi, l'app resta viva per settimane e quel controllo non ricapita mai,
+                // quindi «una volta al giorno» era vero solo per chi spegne il computer tutte le
+                // sere. Il risveglio è il momento in cui una giornata nuova comincia davvero, e il
+                // limite di 24 ore dentro `isDue` fa già da filtro: attaccarlo qui non aggiunge
+                // una chiamata di rete, ne rende possibile una che prima si perdeva.
+                if !ShotDelegate.isProbe { self.updater.checkIfDue() }
+            }
         }
         if !ShotDelegate.isProbe {
             DispatchQueue.main.async { [weak self] in self?.updater.checkIfDue() }

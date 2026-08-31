@@ -263,6 +263,16 @@ public enum S {
     public static var checkUpdatesButton: String {
         L.t(en: "Check for updates", it: "Verifica aggiornamenti")
     }
+    /// Il titolo della riga in Preferenze, dove il comando è andato a vivere il 31/08.
+    public static var updatesTitle: String {
+        L.t(en: "Updates", it: "Aggiornamenti")
+    }
+    /// La nota della stessa riga. Dice che il controllo è **automatico**, perché un bottone da
+    /// solo fa credere che sia l'unico modo di accorgersi di una versione nuova.
+    public static var updatesNote: String {
+        L.t(en: "Checks itself once a day, starting at launch. The button asks right now.",
+            it: "Si controlla da solo una volta al giorno, a partire dall'avvio. Il bottone chiede subito.")
+    }
     public static var updatesChecking: String {
         L.t(en: "Checking…", it: "Controllo…")
     }

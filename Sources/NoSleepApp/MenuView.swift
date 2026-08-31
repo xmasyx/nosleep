@@ -136,49 +136,71 @@ struct MenuView: View {
         }
         // Il disaccordo fra ciò che l'app vuole e ciò che il sistema fa si dice, non si nasconde.
         if model.config.lidAwake && !model.lidAwakeReal { parts.append(S.lidPending) }
-        if let n = model.lastNote { parts.append(n) }
+        // **«Coperchio pronto, puoi abbassare lo schermo» non compare più** (sua richiesta,
+        // 31/08: «non ci serve»). È una riga che dice che tutto va bene, e lo dice ogni volta che
+        // l'automatismo arma il coperchio, cioè quasi sempre. Resta nel registro, dove serve a
+        // ricostruire cosa è successo, e sparisce da dove serviva solo a occupare spazio.
+        //
+        // Il confronto è con `S.lidArmed` e non con una stringa scritta qui: le due parti leggono
+        // lo stesso posto, quindi cambiando le parole non si scollano. Le altre note restano —
+        // «attivato automaticamente» dice che qualcosa è cambiato **senza che tu l'abbia toccato**,
+        // e quella è informazione.
+        if let n = model.lastNote, n != S.lidArmed { parts.append(n) }
         return parts.joined(separator: " · ")
     }
 
     /// Un selettore nostro, non un `Picker` di sistema: un controllo di serie dentro questa livrea
     /// porta i colori di qualcun altro e si vede subito.
     var footer: some View {
-        // **Due righe, che sono la sua scelta del 30/08 rimessa al suo posto.** Il 31/08 le avevo
-        // riunite in una sola: era possibile, perché la larghezza non è più un numero scritto a
-        // mano, ma i tre comandi in fila chiedono **464 punti** e lui li ha guardati e ha detto
-        // che è troppo. Su due righe la fila più lunga ne chiede molti meno e il pannello torna al
-        // suo pavimento.
+        // **Una riga sola, e stavolta ci sta davvero** (sua richiesta, 31/08). «Verifica
+        // aggiornamenti» è andato in Preferenze, quindi qui restano due comandi e la firma, che è
+        // la fila corta che il 30/08 stava già larga. Il 31/08 mattina i tre comandi in fila
+        // chiedevano 464 punti e li aveva bocciati: togliendo il terzo il problema non si aggira,
+        // si scioglie.
         //
-        // La differenza che resta rispetto a prima del 31/08: la larghezza è **misurata**, non
-        // dichiarata. Se un giorno un'etichetta si allunga, il pannello cresce invece di
-        // troncarla, che era il difetto che aveva costretto a spezzare la fila.
+        // **Accanto al nome c'è la versione**, letta dal bundle e non scritta qui: un numero
+        // scritto a mano nel codice è il numero che resta indietro al primo rilascio.
         //
-        // Il testo dello stato sta fuori dal gruppo dei comandi: è l'unica parte che può diventare
-        // lunga a piacere (la riga di `brew` durante un aggiornamento) e quando lo spazio manca è
-        // lui ad accorciarsi, mai un comando.
-        VStack(spacing: 7) {
-            HStack(spacing: 8) {
-                commands
+        // Il testo di stato e il bottone dell'aggiornamento compaiono **solo quando c'è davvero
+        // qualcosa da dire**: a controllo fatto e app aggiornata la riga tornerebbe a dire «sono
+        // aggiornata» tutti i giorni, che è la stessa specie di rumore del «coperchio pronto» che
+        // ha appena fatto togliere.
+        HStack(spacing: 8) {
+            commands
 
-                Spacer(minLength: 8)
+            Spacer(minLength: 8)
 
-                Text("NoSleep")
-                    .font(.system(size: 10.5, design: .rounded))
-                    .foregroundStyle(Color(s.dim))
-                    .fixedSize()
-            }
+            updateStatusText
+                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .trailing)
 
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
+            updateAction
 
-                updateStatusText
-                    .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .trailing)
-
-                updateAction
-            }
+            Text(Self.wordmark)
+                .font(.system(size: 10.5, design: .rounded))
+                .foregroundStyle(Color(s.dim))
+                .fixedSize()
         }
         .padding(.horizontal, Self.hPadding)
         .padding(.vertical, 9)
+    }
+
+    /// La versione del bundle. **Letta, non scritta**: `build-app.sh` la mette in
+    /// `CFBundleShortVersionString` da una variabile sola, e questo la rilegge da lì. Un numero
+    /// ricopiato nel codice è quello che al rilascio dopo dice ancora quello di prima.
+    ///
+    /// Fuori da un `.app` — le sonde girano da `.build/` — la chiave non esiste e non si inventa
+    /// niente: si mostra il solo nome, perché una versione finta in una fotografia è peggio di
+    /// nessuna versione.
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    /// «NoSleep 1.3.1», o il solo «NoSleep» fuori da un bundle. Composto qui e non nel corpo della
+    /// vista perché senza versione l'interpolazione lascerebbe uno spazio in coda, invisibile a
+    /// leggere il codice e visibile nella fotografia.
+    static var wordmark: String {
+        let v = appVersion
+        return v.isEmpty ? "NoSleep" : "NoSleep \(v)"
     }
 
     /// I due comandi della prima riga.
@@ -207,17 +229,15 @@ struct MenuView: View {
     /// `StatusPanel` lo somma alla fila dei comandi per ricavare la larghezza.
     static let hPadding: CGFloat = 14
 
-    /// **Il comando** degli aggiornamenti: sta nel gruppo a misura fissa, accanto agli altri due,
-    /// e uno solo per volta — quando c'è qualcosa da fare (aggiorna, scarica) prende il posto di
-    /// «Verifica aggiornamenti» invece di aggiungersi.
+    /// **Nel pannello resta solo il comando che serve adesso.**
     ///
-    /// Mentre l'aggiornamento gira non c'è nessun comando: l'unica cosa da mostrare è la riga di
-    /// `brew`, che vive dall'altra parte.
+    /// «Verifica aggiornamenti» è andato in Preferenze il 31/08, per sua richiesta: è una cosa che
+    /// si fa una volta ogni tanto, e il controllo automatico la rende quasi sempre inutile. Qui
+    /// compare **solo** il bottone che agisce, e solo quando c'è davvero una versione nuova, cioè
+    /// nell'unico momento in cui un comando in fondo al pannello vale il suo posto.
     @ViewBuilder
     private var updateAction: some View {
         switch updater.state {
-        case .idle, .upToDate, .failed:
-            checkButton
         case .available(_, let action):
             switch action {
             case .upgradeAndRelaunch:
@@ -225,22 +245,25 @@ struct MenuView: View {
             case .openReleasePage:
                 NSButton(title: S.updatesDownloadButton, s: s) { updater.perform(action) }
             }
-        case .checking, .upgrading:
+        case .idle, .upToDate, .failed, .checking, .upgrading:
             EmptyView()
         }
     }
 
     /// **Il testo** degli aggiornamenti, cioè la parte che può allungarsi a piacere e che perciò
     /// non deve mai poter allargare il pannello: qui si accorcia, i comandi mai.
+    ///
+    /// `idle` e `upToDate` non dicono niente: la versione installata è già scritta accanto al nome
+    /// due centimetri più in là, e «sono aggiornata» tutti i giorni è lo stesso rumore del
+    /// «coperchio pronto» che ha fatto togliere lo stesso giorno. Lo stato pieno vive in
+    /// Preferenze, dove uno va apposta a chiederlo.
     @ViewBuilder
     private var updateStatusText: some View {
         switch updater.state {
-        case .idle:
+        case .idle, .upToDate:
             EmptyView()
         case .checking:
             updateText(S.updatesChecking)
-        case .upToDate(let current):
-            updateText(S.updatesUpToDate(current))
         case .available(let version, _):
             updateText(S.updatesAvailable(version))
         case .upgrading(let line):

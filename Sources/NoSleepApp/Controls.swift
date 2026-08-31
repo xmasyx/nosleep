@@ -80,23 +80,39 @@ struct NSRow<Trailing: View, Extra: View>: View {
     @ViewBuilder var trailing: Trailing
     @ViewBuilder var extra: Extra
 
+    /// **La nota passa sotto l'interruttore, non gli sta accanto** (sua richiesta del 31/08:
+    /// «puoi allargare il testo delle descrizioni che vada anche sotto il toggle se c'è la giusta
+    /// distanza»).
+    ///
+    /// Prima titolo, chip e nota stavano nella stessa colonna stretta accanto al comando, quindi
+    /// la nota perdeva una cinquantina di punti che nessuno usava: «Si attiva automaticamente solo
+    /// Tieni sveglio il Mac…» andava a capo tre volte con mezzo pannello vuoto alla sua destra.
+    /// Adesso divide la riga con l'interruttore **solo il titolo**, che è la parte che deve stargli
+    /// accanto per dire a che cosa si riferisce; la nota prende tutta la larghezza sotto.
+    ///
+    /// «La giusta distanza» è la parte da non sbagliare, ed è il motivo degli 8 punti al posto dei
+    /// 7 di prima: la nota adesso passa sotto un comando alto 20 e non sotto un testo alto 16.
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color(s.text))
-                    .fixedSize(horizontal: false, vertical: true)
-                extra
-                Text(note)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Color(s.dim))
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(title)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color(s.text))
+                        .fixedSize(horizontal: false, vertical: true)
+                    extra
+                }
+                Spacer(minLength: 0)
+                // Un pelo più in basso del bordo del testo: l'interruttore è alto 20 e la riga del
+                // titolo 16, quindi allineandoli in cima l'interruttore sembra salito.
+                trailing.padding(.top, -1)
             }
-            Spacer(minLength: 0)
-            // Un pelo più in basso del bordo del testo: l'interruttore è alto 20 e la riga del
-            // titolo 16, quindi allineandoli in cima l'interruttore sembra salito.
-            trailing.padding(.top, -1)
+
+            Text(note)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color(s.dim))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

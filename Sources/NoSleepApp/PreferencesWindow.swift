@@ -89,6 +89,11 @@ struct PreferencesView: View {
             Rows.wipeAccess(model: model, s: s)
             Divider().overlay(Color(s.rule))
             Rows.login(model: model, s: s)
+            Divider().overlay(Color(s.rule))
+            // In fondo, e in fondo per un motivo: è l'unica riga che non configura **come lavora**
+            // l'app, dice come si tiene aggiornata. Ci è arrivata il 31/08 dal piede del pannello,
+            // dove un bottone premuto una volta al mese occupava un posto tutti i giorni.
+            Rows.updates(model: model, s: s)
             Spacer(minLength: 0)
         }
         .padding(20)
