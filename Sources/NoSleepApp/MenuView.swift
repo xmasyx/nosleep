@@ -74,22 +74,21 @@ struct MenuView: View {
         .frame(minWidth: Self.minWidth, maxWidth: Self.maxWidth)
     }
 
-    /// **Il pavimento e il tetto, non la larghezza.** Era `.frame(width: 340)`, cioè un numero
-    /// solo, e da quel numero venivano le note strette e la fila di comandi che non ci stava —
-    /// «Verifica aggiornamenti» finiva su una seconda riga per far quadrare i conti. Adesso la
-    /// larghezza la detta il contenuto, in pratica la riga dei comandi in fondo, che è l'unica che
-    /// non va a capo; questi due numeri sono soltanto i suoi estremi.
+    /// **I due estremi, non la larghezza.** Era `.frame(width: 340)`, cioè un numero scritto a
+    /// mano: quel numero è la ragione per cui «Verifica aggiornamenti» usciva troncato e i comandi
+    /// erano stati spezzati su due righe. Adesso la larghezza si **misura** dal piede
+    /// (`StatusPanel.contentWidth`), e questi due valori sono soltanto il pavimento e il limite.
     ///
-    /// I 340 restano il minimo perché è la misura con cui il pannello è stato disegnato e con cui
-    /// ogni nota è stata riletta. Il tetto esiste perché un pannello della barra che si allarga
-    /// senza fine smette di leggersi come un menu.
+    /// **Oggi la misura dà 340, cioè il pavimento**, e questo va detto perché sembra un ritorno al
+    /// punto di partenza e non lo è: prima 340 era una dichiarazione, adesso è un risultato. Se
+    /// domani un'etichetta si allunga, il pannello cresce fino a 420 invece di tagliarla.
     ///
-    /// **Il tetto è 470 e non 420 perché la riga dei comandi ne chiede 464** (misurato il 31/08
-    /// alzandolo a 2000). 420 era la mia stima a occhio prima di misurare, e un tetto sotto il
-    /// fabbisogno non è un limite: è il troncamento del 30/08 rimesso al suo posto, con un altro
-    /// nome.
+    /// I 340 sono il minimo perché è la misura con cui il pannello è stato disegnato e con cui
+    /// ogni nota è stata riletta. Il limite superiore esiste perché un pannello della barra che si
+    /// allarga senza fine smette di leggersi come un menu: **su una riga sola i tre comandi ne
+    /// chiedevano 464, e lui li ha guardati e ha detto che era troppo largo** (31/08).
     static let minWidth: CGFloat = 340
-    static let maxWidth: CGFloat = 470
+    static let maxWidth: CGFloat = 420
 
     // ── Pezzi ────────────────────────────────────────────────────────────────
 
@@ -144,42 +143,51 @@ struct MenuView: View {
     /// Un selettore nostro, non un `Picker` di sistema: un controllo di serie dentro questa livrea
     /// porta i colori di qualcun altro e si vede subito.
     var footer: some View {
-        // **Una riga, di nuovo, e stavolta senza tarare niente.** Il 30/08 i comandi erano stati
-        // spezzati su due righe perché su 340 punti non ci stavano: «Verifica aggiornamenti»
-        // usciva troncato in «Verifica aggiornam…» e poi tutti e tre in «Disattiva e c…» (due foto
-        // di quel giorno). La causa non erano i tre bottoni, era la larghezza scritta a mano — ed
-        // è quella che è stata tolta.
+        // **Due righe, che sono la sua scelta del 30/08 rimessa al suo posto.** Il 31/08 le avevo
+        // riunite in una sola: era possibile, perché la larghezza non è più un numero scritto a
+        // mano, ma i tre comandi in fila chiedono **464 punti** e lui li ha guardati e ha detto
+        // che è troppo. Su due righe la fila più lunga ne chiede molti meno e il pannello torna al
+        // suo pavimento.
         //
-        // Il testo dello stato sta **fuori** dal gruppo dei comandi: è l'unica parte che può
-        // diventare lunga a piacere (la riga di `brew` durante un aggiornamento) e quando lo
-        // spazio manca è lui ad accorciarsi, mai un comando.
-        HStack(spacing: 8) {
-            commands
+        // La differenza che resta rispetto a prima del 31/08: la larghezza è **misurata**, non
+        // dichiarata. Se un giorno un'etichetta si allunga, il pannello cresce invece di
+        // troncarla, che era il difetto che aveva costretto a spezzare la fila.
+        //
+        // Il testo dello stato sta fuori dal gruppo dei comandi: è l'unica parte che può diventare
+        // lunga a piacere (la riga di `brew` durante un aggiornamento) e quando lo spazio manca è
+        // lui ad accorciarsi, mai un comando.
+        VStack(spacing: 7) {
+            HStack(spacing: 8) {
+                commands
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            updateStatusText
-                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .trailing)
+                Text("NoSleep")
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Color(s.dim))
+                    .fixedSize()
+            }
 
-            Text("NoSleep")
-                .font(.system(size: 10.5, design: .rounded))
-                .foregroundStyle(Color(s.dim))
-                .fixedSize()
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+
+                updateStatusText
+                    .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .trailing)
+
+                updateAction
+            }
         }
         .padding(.horizontal, Self.hPadding)
         .padding(.vertical, 9)
     }
 
-    /// La fila dei comandi, e **la cosa che decide la larghezza del pannello**.
+    /// I due comandi della prima riga.
     ///
-    /// Sta in una proprietà sua perché `StatusPanel` la monta **da sola** per misurarla. La misura
-    /// non poteva venire da `fittingSize` sull'intero pannello: la larghezza ideale di una nota
-    /// che va a capo è tutta la frase **su una riga**, quindi il totale usciva **779 punti**
-    /// (misurato il 31/08 alzando il tetto), cioè il pannello sarebbe stato incollato al massimo
-    /// per sempre e «larghezza dal contenuto» sarebbe stata una frase, non un comportamento.
-    ///
-    /// Misurare *questa* invece di ricalcolare a mano le larghezze dei bottoni è la differenza fra
-    /// una sonda e una seconda implementazione che diverge al primo ritocco di un'etichetta.
+    /// `fixedSize` vuol dire «questa è la mia misura vera, non restringermi»: è ciò che rende la
+    /// larghezza del pannello misurabile invece che dichiarata. La misura vera però si chiede a
+    /// `footer`, non a questa: qui mancano lo spazio e l'etichetta «NoSleep», e sommarli a mano è
+    /// riscrivere il layout in un secondo posto. La fotografia del 31/08 col piede tagliato da
+    /// tutte e due le parti è costata esattamente quella somma fatta a mano.
     var commands: some View {
         HStack(spacing: 7) {
             NSButton(title: S.quitButton, s: s) { model.releaseEverythingAndQuit() }
@@ -191,8 +199,6 @@ struct MenuView: View {
                 MenuBarPanel.dismiss()
                 PreferencesWindow.shared.show(model: model)
             }
-
-            updateAction
         }
         .fixedSize(horizontal: true, vertical: false)
     }
