@@ -3,6 +3,18 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
+## 1.3.1 — 2026-08-31
+
+### New signing identity
+
+- The self-signed certificate NoSleep is built with was regenerated, and the release workflow now
+  pins the new one. macOS sees a new identity once, so **Accessibility must be granted again**
+  after this update. Every update after this one keeps it.
+- `Scripts/make-signing-cert.sh` no longer deletes the `.p12` it creates: the private key is kept,
+  so the identity can be restored instead of recreated. `Scripts/build-app.sh` now signs by
+  certificate fingerprint instead of by name, which is ambiguous when two keychains hold a
+  certificate with the same common name.
+
 ## 1.3.0 — 2026-08-30
 
 ### The panel updates the app

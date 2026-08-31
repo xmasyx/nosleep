@@ -138,7 +138,7 @@ jobs:
       - name: Pin the signing identity
         run: |
           APP="dist/NoSleep.app"
-          REQ='identifier "app.nosleep.mac" and certificate leaf = H"d93387f7f9a8592bb960bd0177c03a31c9c59e2f"'
+          REQ='identifier "app.nosleep.mac" and certificate leaf = H"038f871d082261a8394a3b2c32203d7b61f82776"'
           codesign --verify --strict -R="$REQ" "$APP" \
             || { echo "::error::il bundle non soddisfa il designated requirement fissato: un certificato diverso azzererebbe i permessi gia concessi"; exit 1; }
 

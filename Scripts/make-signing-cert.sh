@@ -63,11 +63,21 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
 
 # `security import` rifiuta i p12 senza password («MAC verification failed») e non legge
 # il MAC predefinito di OpenSSL 3: serve una password e `-legacy` dove esiste.
-P12PASS="otium"
+P12PASS="${P12_PASS:-$(openssl rand -hex 16)}"
 LEGACY=""
 if openssl pkcs12 -help 2>&1 | grep -q -- "-legacy"; then LEGACY="-legacy"; fi
 openssl pkcs12 -export $LEGACY -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -out "$TMP/otium.p12" -passout "pass:$P12PASS" -name "$IDENTITY"
+
+# Il .p12 e la SOLA copia della chiave privata: senza, un portachiavi ricreato da
+# macOS porta via l identita per sempre (successo il 30/08/2026). Si copia fuori
+# PRIMA che il trap cancelli $TMP, e mai dentro un repository.
+BACKUP_DIR="${SIGNING_BACKUP_DIR:-$HOME/Library/Application Support/NoSleep/signing}"
+mkdir -p "$BACKUP_DIR"
+cp "$TMP/otium.p12" "$BACKUP_DIR/nosleep.p12"
+printf '%s\n' "$P12PASS" > "$BACKUP_DIR/nosleep.password"
+chmod 600 "$BACKUP_DIR/nosleep.p12" "$BACKUP_DIR/nosleep.password"
+echo "- chiave privata conservata in $BACKUP_DIR/nosleep.p12 (password in nosleep.password)"
 
 echo "▸ importo nel portachiavi di login (con accesso per codesign)…"
 security import "$TMP/otium.p12" -k "$KEYCHAIN" -P "$P12PASS" -A -T /usr/bin/codesign

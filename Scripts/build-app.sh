@@ -17,7 +17,7 @@ DEST="${1:-${TMPDIR:-/tmp}/NoSleep-build}"
 APP="$DEST/NoSleep.app"
 # Su un tag il tag È la versione: un binario libero di dichiararne un'altra mente proprio sulla
 # pagina del rilascio. In locale resta il numero corrente quando nessuno lo impone dall'esterno.
-VERSION="${NOSLEEP_VERSION:-1.3.0}"
+VERSION="${NOSLEEP_VERSION:-1.3.1}"
 
 cd "$ROOT"
 
@@ -172,9 +172,15 @@ PLIST
 # Identità stabile se c'è, ad-hoc altrimenti, e lo si dice invece di firmare di nascosto in un
 # modo diverso da quello atteso.
 IDENTITY="NoSleep Dev"
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+
+# Si firma con l'IMPRONTA, non col nome: dal 30/08/2026 sul Mac convivono due portachiavi
+# con certificati omonimi e `codesign -s "<nome>"` esce «ambiguous» senza firmare. `find-identity
+# -v` elenca solo le identità con chiave privata usabile, quindi l'impronta che ne esce è
+# l'unica con cui si può davvero firmare.
+SIGN_HASH="$(security find-identity -v -p codesigning 2>/dev/null | awk -v n="\"${IDENTITY}\"" 'index($0, n) { print $2; exit }')"
+if [[ -n "${SIGN_HASH:-}" ]]; then
     echo "▸ firma con identità stabile «${IDENTITY}»…"
-    codesign --force --deep --sign "$IDENTITY" --timestamp=none "$APP"
+    codesign --force --deep --sign "$SIGN_HASH" --timestamp=none "$APP"
 elif [[ "${NOSLEEP_RELEASE:-0}" == "1" ]]; then
     # Un artefatto pubblicato NON può essere firmato ad-hoc, e il motivo non è estetico: la firma
     # ad-hoc cambia identità a ogni ricostruzione, quindi macOS tratta ogni aggiornamento come
