@@ -17,7 +17,7 @@ DEST="${1:-${TMPDIR:-/tmp}/NoSleep-build}"
 APP="$DEST/NoSleep.app"
 # Su un tag il tag È la versione: un binario libero di dichiararne un'altra mente proprio sulla
 # pagina del rilascio. In locale resta il numero corrente quando nessuno lo impone dall'esterno.
-VERSION="${NOSLEEP_VERSION:-1.3.1}"
+VERSION="${NOSLEEP_VERSION:-1.3.2}"
 
 cd "$ROOT"
 

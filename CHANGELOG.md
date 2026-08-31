@@ -3,6 +3,28 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
+## 1.3.2 — 2026-08-31
+
+### The panel sits on the menu bar
+
+- The panel used to float sixteen points below the menu bar, with square corners and a width
+  hard-coded to 340 points. All three came from the same place: it was a SwiftUI `MenuBarExtra`
+  scene, whose window neither its position nor its shape is ours to set. The status item and its
+  panel are now AppKit, like the sibling apps: it starts exactly where the menu bar ends, its
+  corners are rounded, and its width is measured from the row of commands rather than declared.
+
+### Less noise, more room
+
+- «Lid ready, you can close it» is gone from the status line. It said everything was fine, and it
+  said it nearly every time. It stays in the log.
+- Descriptions now run the full width, below the switch instead of beside it. They used to give up
+  fifty points that nothing else was using.
+- **Check for updates** moved into Preferences, where the full state lives too. The panel keeps
+  only the button that acts, and only when a newer version really exists.
+- The version sits next to the name in the panel, read from the bundle.
+- The automatic check now also runs on **wake**, not only at launch. It used to run once in
+  `start()`, so on a Mac that sleeps instead of rebooting «once a day» never happened again.
+
 ## 1.3.1 — 2026-08-31
 
 ### New signing identity
