@@ -42,8 +42,10 @@ struct MenuView: View {
             .padding(.vertical, 12)
 
 
-            Divider().overlay(Color(s.rule))
-
+            // **Un filetto solo.** Ce n'erano due di fila, e due filetti attaccati disegnano una
+            // riga più spessa e più scura delle altre quattro: nella fotografia del 31/08 quel
+            // gruppo si stacca dagli altri senza che niente lo giustifichi. Un refuso di
+            // impaginazione, non una scelta, e si vede solo guardando la pagina intera.
             Divider().overlay(Color(s.rule))
 
             // Prima si attiva, poi si disattiva: l'ordine delle righe segue l'ordine dei fatti.
@@ -69,9 +71,25 @@ struct MenuView: View {
 
             footer
         }
-        .frame(width: 340)
-        .background(Color(s.paper))
+        .frame(minWidth: Self.minWidth, maxWidth: Self.maxWidth)
     }
+
+    /// **Il pavimento e il tetto, non la larghezza.** Era `.frame(width: 340)`, cioè un numero
+    /// solo, e da quel numero venivano le note strette e la fila di comandi che non ci stava —
+    /// «Verifica aggiornamenti» finiva su una seconda riga per far quadrare i conti. Adesso la
+    /// larghezza la detta il contenuto, in pratica la riga dei comandi in fondo, che è l'unica che
+    /// non va a capo; questi due numeri sono soltanto i suoi estremi.
+    ///
+    /// I 340 restano il minimo perché è la misura con cui il pannello è stato disegnato e con cui
+    /// ogni nota è stata riletta. Il tetto esiste perché un pannello della barra che si allarga
+    /// senza fine smette di leggersi come un menu.
+    ///
+    /// **Il tetto è 470 e non 420 perché la riga dei comandi ne chiede 464** (misurato il 31/08
+    /// alzandolo a 2000). 420 era la mia stima a occhio prima di misurare, e un tetto sotto il
+    /// fabbisogno non è un limite: è il troncamento del 30/08 rimesso al suo posto, con un altro
+    /// nome.
+    static let minWidth: CGFloat = 340
+    static let maxWidth: CGFloat = 470
 
     // ── Pezzi ────────────────────────────────────────────────────────────────
 
@@ -125,81 +143,116 @@ struct MenuView: View {
 
     /// Un selettore nostro, non un `Picker` di sistema: un controllo di serie dentro questa livrea
     /// porta i colori di qualcun altro e si vede subito.
-    private var footer: some View {
-        // Due righe, e la prima resta quella di sempre. Tre bottoni su 340 punti non ci stanno:
-        // «Verifica aggiornamenti» usciva troncato in «Verifica aggiornam…» e poi tutti e tre in
-        // «Disattiva e c…» (due foto del 30/08), e un'etichetta che si restringe da sola è un
-        // comando che mente sulla sua larghezza. Gli aggiornamenti hanno la seconda riga intera:
-        // un bottone solo per volta, con accanto il testo dello stato quando c'è.
-        VStack(spacing: 7) {
-            HStack(spacing: 7) {
-                NSButton(title: S.quitButton, s: s) { model.releaseEverythingAndQuit() }
+    var footer: some View {
+        // **Una riga, di nuovo, e stavolta senza tarare niente.** Il 30/08 i comandi erano stati
+        // spezzati su due righe perché su 340 punti non ci stavano: «Verifica aggiornamenti»
+        // usciva troncato in «Verifica aggiornam…» e poi tutti e tre in «Disattiva e c…» (due foto
+        // di quel giorno). La causa non erano i tre bottoni, era la larghezza scritta a mano — ed
+        // è quella che è stata tolta.
+        //
+        // Il testo dello stato sta **fuori** dal gruppo dei comandi: è l'unica parte che può
+        // diventare lunga a piacere (la riga di `brew` durante un aggiornamento) e quando lo
+        // spazio manca è lui ad accorciarsi, mai un comando.
+        HStack(spacing: 8) {
+            commands
 
-                NSButton(title: S.preferencesButton, s: s) {
-                    // Il pannello si chiude PRIMA di aprire le Preferenze, altrimenti la finestra
-                    // nasce dietro un pannello ancora aperto e lui non la vede (sua osservazione,
-                    // 2026-08-07).
-                    MenuBarPanel.dismiss()
-                    PreferencesWindow.shared.show(model: model)
-                }
+            Spacer(minLength: 8)
 
-                Spacer(minLength: 0)
+            updateStatusText
+                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .trailing)
 
-                Text("NoSleep")
-                    .font(.system(size: 10.5, design: .rounded))
-                    .foregroundStyle(Color(s.dim))
-            }
-
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                updateState
-            }
+            Text("NoSleep")
+                .font(.system(size: 10.5, design: .rounded))
+                .foregroundStyle(Color(s.dim))
+                .fixedSize()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Self.hPadding)
         .padding(.vertical, 9)
     }
 
+    /// La fila dei comandi, e **la cosa che decide la larghezza del pannello**.
+    ///
+    /// Sta in una proprietà sua perché `StatusPanel` la monta **da sola** per misurarla. La misura
+    /// non poteva venire da `fittingSize` sull'intero pannello: la larghezza ideale di una nota
+    /// che va a capo è tutta la frase **su una riga**, quindi il totale usciva **779 punti**
+    /// (misurato il 31/08 alzando il tetto), cioè il pannello sarebbe stato incollato al massimo
+    /// per sempre e «larghezza dal contenuto» sarebbe stata una frase, non un comportamento.
+    ///
+    /// Misurare *questa* invece di ricalcolare a mano le larghezze dei bottoni è la differenza fra
+    /// una sonda e una seconda implementazione che diverge al primo ritocco di un'etichetta.
+    var commands: some View {
+        HStack(spacing: 7) {
+            NSButton(title: S.quitButton, s: s) { model.releaseEverythingAndQuit() }
+
+            NSButton(title: S.preferencesButton, s: s) {
+                // Il pannello si chiude PRIMA di aprire le Preferenze, altrimenti la finestra
+                // nasce dietro un pannello ancora aperto e lui non la vede (sua osservazione,
+                // 2026-08-07).
+                MenuBarPanel.dismiss()
+                PreferencesWindow.shared.show(model: model)
+            }
+
+            updateAction
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// Il respiro orizzontale del pannello, condiviso da ogni sezione. Sta qui perché
+    /// `StatusPanel` lo somma alla fila dei comandi per ricavare la larghezza.
+    static let hPadding: CGFloat = 14
+
+    /// **Il comando** degli aggiornamenti: sta nel gruppo a misura fissa, accanto agli altri due,
+    /// e uno solo per volta — quando c'è qualcosa da fare (aggiorna, scarica) prende il posto di
+    /// «Verifica aggiornamenti» invece di aggiungersi.
+    ///
+    /// Mentre l'aggiornamento gira non c'è nessun comando: l'unica cosa da mostrare è la riga di
+    /// `brew`, che vive dall'altra parte.
     @ViewBuilder
-    private var updateState: some View {
+    private var updateAction: some View {
+        switch updater.state {
+        case .idle, .upToDate, .failed:
+            checkButton
+        case .available(_, let action):
+            switch action {
+            case .upgradeAndRelaunch:
+                NSButton(title: S.updatesUpgradeButton, s: s) { updater.perform(action) }
+            case .openReleasePage:
+                NSButton(title: S.updatesDownloadButton, s: s) { updater.perform(action) }
+            }
+        case .checking, .upgrading:
+            EmptyView()
+        }
+    }
+
+    /// **Il testo** degli aggiornamenti, cioè la parte che può allungarsi a piacere e che perciò
+    /// non deve mai poter allargare il pannello: qui si accorcia, i comandi mai.
+    @ViewBuilder
+    private var updateStatusText: some View {
         switch updater.state {
         case .idle:
-            checkButton
+            EmptyView()
         case .checking:
             updateText(S.updatesChecking)
         case .upToDate(let current):
-            HStack(spacing: 8) {
-                updateText(S.updatesUpToDate(current))
-                checkButton
-            }
-        case .available(let version, let action):
-            HStack(spacing: 8) {
-                updateText(S.updatesAvailable(version))
-                switch action {
-                case .upgradeAndRelaunch:
-                    NSButton(title: S.updatesUpgradeButton, s: s) { updater.perform(action) }
-                case .openReleasePage:
-                    NSButton(title: S.updatesDownloadButton, s: s) { updater.perform(action) }
-                }
-            }
+            updateText(S.updatesUpToDate(current))
+        case .available(let version, _):
+            updateText(S.updatesAvailable(version))
         case .upgrading(let line):
+            // La coda della riga di `brew` è la parte che dice a che punto è: si taglia la testa.
             Text(line)
                 .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(Color(s.dim))
                 .lineLimit(1)
                 .truncationMode(.head)
         case .failed(let reason):
-            HStack(spacing: 8) {
-                Text(reason)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Color(s.dim))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                checkButton
-            }
+            Text(reason)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color(s.dim))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 
-    /// Uno solo per riga: quando c'è un'azione da fare (aggiorna, scarica) prende il suo posto.
     private var checkButton: some View {
         NSButton(title: S.checkUpdatesButton, s: s) { updater.checkNow() }
     }
@@ -209,5 +262,6 @@ struct MenuView: View {
             .font(.system(size: 10.5))
             .foregroundStyle(Color(s.dim))
             .lineLimit(1)
+            .truncationMode(.tail)
     }
 }

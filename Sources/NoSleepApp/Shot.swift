@@ -17,6 +17,14 @@ import ServiceManagement
 final class ShotDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
 
+    /// Il modello dell'app vera, depositato da `NoSleepApp.init` prima che il lancio finisca.
+    /// Le sonde non lo usano: ognuna costruisce il proprio su uno stato usa e getta.
+    @MainActor static var liveModel: AppModel?
+
+    /// L'elemento nella barra e il suo pannello. Vive quanto l'app: se nessuno lo trattiene,
+    /// `NSStatusItem` sparisce dalla barra al primo giro dell'ARC.
+    @MainActor private var statusPanel: StatusPanel?
+
     /// Il banco delle icone: tutte quelle che possono comparire nella barra devono avere la stessa
     /// larghezza, altrimenti il pannello si sposta di lato quando cambia stato.
     ///
@@ -799,6 +807,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             || CommandLine.arguments.contains("--selftest-login")
             || CommandLine.arguments.contains("--selftest-prefs")
             || CommandLine.arguments.contains("--selftest-wipe")
+            || CommandLine.arguments.contains("--misura-pannello")
             || CommandLine.arguments.contains("--bench-updates")
     }
 
@@ -843,10 +852,23 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest-login") { Self.checkLogin() }
         if CommandLine.arguments.contains("--selftest-prefs") { Self.checkPreferences() }
         if CommandLine.arguments.contains("--selftest-wipe") { Self.checkWipe() }
+        if CommandLine.arguments.contains("--misura-pannello") { StatusPanel.scheduleMeasure() }
 
         // Le sonde (`--scatta`, `--selftest-*`) sono processi usa-e-getta e devono poter girare
         // accanto all'app installata; l'app vera invece è una sola.
         if !Self.isProbe { SingleInstance.enforceOrExit() }
+
+        // **L'elemento nella barra si costruisce qui dal 2026-08-31.** Prima lo dichiarava
+        // `MenuBarExtra` dentro la scena SwiftUI; adesso è `NSStatusItem`, come in Kalamos e
+        // Otium, e va tenuto da qualcuno o sparisce dalla barra al primo giro dell'ARC.
+        //
+        // Serve anche a `--barra`, che fotografa proprio quell'elemento: senza questa riga la
+        // sonda scatterebbe una striscia di barra vuota e il verde direbbe soltanto che
+        // `screencapture` funziona. `--scatta` invece monta il pannello per conto suo, e con lo
+        // stato usa e getta della sonda, quindi qui si ferma.
+        if Self.requestedPath == nil, let live = Self.liveModel {
+            statusPanel = StatusPanel(model: live)
+        }
 
         if Self.wantsBarProbe, let file = Self.barProbePath {
             // Uno scatto solo. **Erano tre a mezzo secondo l'uno dall'altro** finché nella barra
@@ -873,17 +895,44 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
 
         let model = AppModel()
         let prefs = CommandLine.arguments.contains("--preferenze")
+        // **Il pannello si fotografa dentro la sua cornice, non nudo** (2026-08-31). Prima qui
+        // c'era `MenuView` da sola, dentro una finestra col titolo e larga **330** punti scritti a
+        // mano, mentre il pannello vero ne era largo 340 e viveva in un'altra finestra ancora:
+        // due superfici diverse che nessun confronto poteva far coincidere. È la ragione per cui
+        // questa sonda non ha mai potuto vedere gli angoli quadrati né i sedici punti di distacco,
+        // pur essendo stata usata per settimane. Adesso monta `PanelChrome`, che è esattamente
+        // ciò che `StatusPanel` mette nel pannello vero.
         let host: NSHostingView<AnyView> = prefs
             ? NSHostingView(rootView: AnyView(PreferencesView(model: model)))
-            : NSHostingView(rootView: AnyView(MenuView(model: model)))
-        host.frame = NSRect(x: 0, y: 0, width: prefs ? 440 : 330, height: 340)
+            : NSHostingView(rootView: AnyView(PanelChrome(model: model)))
+        // **La larghezza non si dichiara più, e non si ricalcola nemmeno**: la chiede alla stessa
+        // funzione che la decide nel pannello vero. Prima erano 330 punti scritti qui contro i 340
+        // del pannello, cioè due superfici diverse che nessun confronto poteva far coincidere.
+        let misura: NSSize
+        if prefs {
+            misura = NSSize(width: 440, height: 340)
+        } else {
+            let w = StatusPanel.contentWidth(for: model)
+            host.rootView = AnyView(PanelChrome(model: model).frame(width: w))
+            host.layoutSubtreeIfNeeded()
+            misura = NSSize(width: w, height: host.fittingSize.height)
+        }
+        host.frame = NSRect(origin: .zero, size: misura)
 
         let w = NSWindow(contentRect: host.frame,
-                         styleMask: [.titled, .fullSizeContentView],
+                         styleMask: prefs ? [.titled, .fullSizeContentView] : [.borderless],
                          backing: .buffered, defer: false)
         w.titlebarAppearsTransparent = true
         w.titleVisibility = .hidden
         w.contentView = host
+        if !prefs {
+            // Trasparente come il pannello vero, altrimenti la finestra dipinge il proprio sfondo
+            // negli angoli e la fotografia li rimostra quadrati — cioè mente esattamente sulla
+            // cosa che questa sonda serve a guardare.
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.hasShadow = true
+        }
         if let a = Self.appearance { w.appearance = a }
         w.setFrameOrigin(NSPoint(x: 200, y: 300))
         // Senza `.regular` l'app resta un accessorio della barra dei menu, la finestra non diventa
