@@ -513,6 +513,23 @@ public enum S {
             it: "alla chiusura della pulizia il sistema teneva ancora premuto \(tasti): rimessi a zero"
         )
     }
+    /// Quali modificatori erano premuti nell'istante in cui la pulizia è partita. Sono gli unici
+    /// il cui rilascio passa ancora alle app di sotto (`WipeFilter`), quindi è la riga che spiega
+    /// perché un evento è uscito dal blocco, invece di lasciar credere a un buco.
+    public static func logWipeHeldAtStart(_ tasti: String) -> String {
+        L.t(
+            en: "cleaning started with \(tasti) already held: only their release reaches the apps below",
+            it: "pulizia partita con \(tasti) già premuto: solo il suo rilascio arriva alle app di sotto"
+        )
+    }
+    /// Il maiuscolo bloccato si è acceso sotto lo straccio e l'abbiamo rimesso come stava. La
+    /// commutazione avviene in uno strato più basso del tap, quindi la si ripara, non si previene.
+    public static var logWipeCapsRestored: String {
+        L.t(
+            en: "caps lock turned on while cleaning: put back the way it was",
+            it: "il maiuscolo bloccato si è acceso durante la pulizia: rimesso come stava"
+        )
+    }
     public static var logWipeSecureInput: String {
         L.t(
             en: "another app is using secure input, so the keys bypass NoSleep and cannot all be blocked",

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Carbon.HIToolbox
 import IOKit.pwr_mgt
+import IOKit.hidsystem
 import NoSleepCore
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,6 +38,11 @@ enum WipeEnd {
 private var wipeTapPort: CFMachPort?
 private var wipeTapArmed = false
 
+/// Il registro dei modificatori di questa pulizia. Vive qui per la stessa ragione delle due righe
+/// sopra: la richiamata è una funzione C e non può portarsi dietro un oggetto. Si azzera a ogni
+/// `installTap()`, cioè una volta per pulizia.
+private var wipeFilter = WipeFilter(heldAtStart: 0)
+
 /// La richiamata del tap. Gira sul thread principale, perché è lì che la sorgente è agganciata.
 ///
 /// **Ingoia tutto per costruzione, e lascia passare per eccezione.** Il verso conta: scritta al
@@ -70,30 +76,87 @@ private func wipeTapCallback(proxy: CGEventTapProxy,
             return nil
         }
         // La via di fuga del sistema passa apposta: vedi `WipeExit.isForceQuit`.
+        //
+        // **E dal 2026-09-18 chiude anche la pulizia**, perché da quando i `flagsChanged` si
+        // ingoiano non posso più promettere che il sistema sappia che ⌘⌥ sono premuti nell'istante
+        // in cui gli arriva l'Esc: il pannello di macOS potrebbe non aprirsi. Su una via d'uscita
+        // si sbaglia verso il permissivo, quindi l'evento passa **e** lo schermo nero se ne va: chi
+        // l'ha premuto voleva uscire da qualcosa, e almeno da una delle due cose esce sempre.
         if WipeExit.isForceQuit(keyCode: code, control: control, option: option, command: command) {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { WipeScreen.shared.stop(.manual) }
+            }
             return Unmanaged.passUnretained(event)
         }
     }
 
-    // **Le PRESSIONI si ingoiano, i RILASCI no**, e la regola vale anche per i modificatori nudi
-    // (`flagsChanged`). Non è un buco: un tasto lasciato andare non scrive niente, e un ⌘ premuto
-    // da solo nemmeno, quindi il blocco resta quello di prima.
-    //
-    // Ingoiare un rilascio invece è un guasto che sopravvive alla pulizia: il sistema continua a
-    // credere premuto un tasto che la tua mano ha già mollato, e da lì in poi ogni lettera diventa
-    // una scorciatoia e ⌘⇧3 diventa ⌃⌥⌘⇧3, cioè niente. È esattamente ciò che lui ha visto uscendo
-    // con ⌃⌥⌘esc il 2026-08-28, e la combinazione d'uscita è il caso peggiore perché tiene tre
-    // modificatori insieme proprio nell'istante in cui il tap si sta spegnendo.
-    //
-    // Kalamos, che di tap ne tiene uno sempre acceso, lo aveva già scritto: *«Never consume — a
-    // bare modifier does nothing in other apps, and consuming it would corrupt system modifier
-    // state»*. Qui era scritto il contrario.
-    if type == .keyUp || type == .flagsChanged
+    // **I RILASCI di tasti e pulsanti passano.** Ingoiare un rilascio è un guasto che sopravvive
+    // alla pulizia: il sistema continua a credere premuto un tasto che la tua mano ha già mollato,
+    // e da lì in poi ogni lettera diventa una scorciatoia e ⌘⇧3 diventa ⌃⌥⌘⇧3, cioè niente.
+    if type == .keyUp
         || type == .leftMouseUp || type == .rightMouseUp || type == .otherMouseUp {
         return Unmanaged.passUnretained(event)
     }
 
+    // **I modificatori nudi passano dal registro, e non più tutti.**
+    //
+    // Fino al 2026-09-18 questa riga stava insieme a quella sopra: passavano *tutti* i
+    // `flagsChanged`, pressioni comprese, perché ingoiarne il rilascio è il guasto appena
+    // descritto e distinguere i due casi sembrava non valere la candela. Valeva: Kalamos ha come
+    // grilletto un modificatore nudo (⌥), riconosciuto proprio su questi eventi, e lo straccio che
+    // passava sull'Option apriva una dettatura **mentre lo schermo era nero**. Cioè il blocco
+    // tasti lasciava passare l'unica classe di eventi che un'altra app usa come comando.
+    //
+    // `WipeFilter` tiene le due cose insieme: passa solo il rilascio di un modificatore che era
+    // premuto **prima** che la pulizia cominciasse — gli unici che le app di sotto credono premuti
+    // — e ingoia ogni pressione nuova. Mani sullo straccio, registro vuoto, non passa niente.
+    // Misurato il 2026-09-18 sul registro di Kalamos: con la regola vecchia riceveva i due eventi
+    // dell'⌥, con questa ne riceve zero.
+    if type == .flagsChanged {
+        // Il maiuscolo bloccato non è un tasto che si tiene e non entra nel registro: si ingoia
+        // sempre. Lo stato che lascia dietro non si difende da qui (la commutazione avviene sotto
+        // il tap) e si rimette a posto in `enforceCaps`.
+        switch wipeFilter.modifiers(now: event.flags.rawValue) {
+        case .swallow:
+            return nil
+        case .pass(let flags):
+            // I flag si riscrivono: un modificatore premuto durante la pulizia non deve comparire
+            // di sorpresa nelle app di sotto attaccato al rilascio di un altro.
+            event.flags = CGEventFlags(rawValue: flags)
+            return Unmanaged.passUnretained(event)
+        }
+    }
+
     return nil
+}
+
+/// Lo stato del maiuscolo bloccato, letto da chi lo decide.
+///
+/// `CGEventSource.flagsState` risponde giusto ma con un istante di ritardo dopo una scrittura, e
+/// qui si scrive e si rilegge nello stesso giro: la fonte è IOKit.
+private func capsLockOn() -> Bool {
+    guard let c = hidParamConnection() else { return false }
+    defer { IOServiceClose(c) }
+    var stato = false
+    IOHIDGetModifierLockState(c, Int32(kIOHIDCapsLockState), &stato)
+    return stato
+}
+
+/// Rimette il maiuscolo bloccato come stava. Provato il 2026-09-18: non chiede root.
+private func setCapsLock(_ on: Bool) {
+    guard let c = hidParamConnection() else { return }
+    defer { IOServiceClose(c) }
+    IOHIDSetModifierLockState(c, Int32(kIOHIDCapsLockState), on)
+}
+
+private func hidParamConnection() -> io_connect_t? {
+    let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
+    guard service != 0 else { return nil }
+    defer { IOObjectRelease(service) }
+    var connect: io_connect_t = 0
+    guard IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connect) == KERN_SUCCESS
+    else { return nil }
+    return connect
 }
 
 /// Rimette a zero i modificatori che il sistema crede ancora premuti.
@@ -199,6 +262,12 @@ final class WipeScreen: ObservableObject {
     private var watchdog: Timer?
     private var deadline = Date.distantPast
 
+    /// Com'era il maiuscolo bloccato quando la pulizia è partita, e se l'abbiamo dovuto rimettere.
+    /// Lo stato di partenza è l'unico valore che questa funzione scrive mai: non decide niente, si
+    /// limita a riportare il Mac dove l'ha trovato.
+    private var capsAtStart = false
+    private var capsWasForced = false
+
     /// Dove finisce una riga di registro. Iniettabile perché i banchi girano in una casa loro e
     /// non devono scrivere nel registro vero.
     var record: (String) -> Void = { event in
@@ -234,6 +303,9 @@ final class WipeScreen: ObservableObject {
         remaining = seconds
 
         record(S.logWipeStart(max(1, Int((seconds / 60).rounded()))))
+
+        capsAtStart = capsLockOn()
+        capsWasForced = false
 
         holdDisplayAwake()
         buildWindows()
@@ -300,6 +372,15 @@ final class WipeScreen: ObservableObject {
     }
 
     private func installTap() {
+        // Il registro si semina **prima** di ogni altra cosa, e dallo stato vero: da qui in poi la
+        // richiamata sa quali modificatori le app di sotto credono premuti, che è l'unica
+        // informazione che le distingue da quelli premuti dallo straccio.
+        let premuti = CGEventSource.flagsState(.combinedSessionState)
+        wipeFilter = WipeFilter(heldAtStart: premuti.rawValue)
+        if premuti.rawValue & WipeFilter.heldMask != 0 {
+            record(S.logWipeHeldAtStart(modifierNames(premuti)))
+        }
+
         if secureInputHeld() { record(S.logWipeSecureInput) }
         guard isTrusted() else {
             record(S.logWipeNoAX)
@@ -362,8 +443,26 @@ final class WipeScreen: ObservableObject {
     }
 
     private func tick() {
+        enforceCaps()
         remaining = max(0, deadline.timeIntervalSinceNow)
         if remaining <= 0 { stop(.expired) }
+    }
+
+    /// Tiene il maiuscolo bloccato dov'era, ogni mezzo secondo.
+    ///
+    /// **Perché si ripara invece di prevenire.** Il tasto commuta in uno strato più basso del
+    /// nostro tap: quando l'evento arriva a noi il maiuscolo è già acceso e la spia è già
+    /// accesa, quindi ingoiare l'evento serve solo a non farlo vedere alle app (che è comunque
+    /// giusto) e non basta a rispondere alla sua richiesta. Rimetterlo a posto mezzo secondo dopo
+    /// è la cosa migliore che un'app senza driver può fare, e alla fine della pulizia la tastiera
+    /// è come l'ha lasciata.
+    ///
+    /// Scrive solo quando lo stato è diverso da quello di partenza: se il maiuscolo era acceso
+    /// prima, resta acceso.
+    private func enforceCaps() {
+        guard isActive, capsLockOn() != capsAtStart else { return }
+        setCapsLock(capsAtStart)
+        capsWasForced = true
     }
 
     // ── Spegnere ─────────────────────────────────────────────────────────────
@@ -385,6 +484,14 @@ final class WipeScreen: ObservableObject {
 
         ticker?.invalidate(); ticker = nil
         watchdog?.invalidate(); watchdog = nil
+
+        // Un'ultima volta a mano: il giro da mezzo secondo potrebbe non aver visto l'ultima
+        // pressione, e la riga di registro si scrive qui perché è qui che si sa com'è finita.
+        if capsLockOn() != capsAtStart {
+            setCapsLock(capsAtStart)
+            capsWasForced = true
+        }
+        if capsWasForced { record(S.logWipeCapsRestored) }
 
         NSApp.presentationOptions = savedPresentation
         savedPresentation = []

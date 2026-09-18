@@ -3,6 +3,23 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
+## Unreleased
+
+### Keyboard cleaning really blocks the keys
+
+- A bare modifier key used to pass straight through the lock. It looked harmless — a lone ⌥ types
+  nothing — but another app on this Mac uses exactly that as its dictation trigger, so wiping the
+  cloth across the Option key opened a recording behind the black screen. The lock now keeps a
+  ledger of the modifiers that were already held when it started, passes only their release (with
+  the flags rewritten to what is left) and swallows every new press. Hands on the cloth, nothing
+  gets through — which is what «the keys are blocked» is supposed to mean.
+- Caps lock is put back the way it was found. The key toggles a layer below any event tap, so the
+  light comes on regardless; the app now clears it within half a second and again when the cleaning
+  ends, instead of leaving you in capitals.
+- ⌘⌥Esc, the system escape hatch, now also ends the cleaning. With modifiers swallowed there is no
+  promise that the system still knows ⌘⌥ are held when the Esc reaches it, and on an escape hatch
+  you err on the permissive side.
+
 ## 1.3.2 — 2026-08-31
 
 ### The panel sits on the menu bar
