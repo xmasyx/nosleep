@@ -55,6 +55,21 @@ final class AppModel: ObservableObject {
     private var batteryHeld = false
     /// Il coperchio acceso è opera nostra? Solo allora possiamo spegnerlo noi.
     private var lidArmedByUs = false
+    /// «Tieni sveglio» l'ha acceso l'automatismo del lavoro, e non la sua mano?
+    ///
+    /// Serve alla rete del coperchio chiuso (`ClosedLidNet`), che molla solo ciò che ha preso
+    /// l'automatismo. Diventa vera sulla nota `S.autoArmed`, torna falsa ogni volta che lui tocca
+    /// «tieni sveglio» con la sua mano, in un senso o nell'altro. La batteria che molla e poi
+    /// restituisce non la tocca: restituisce la stessa presa, con la stessa origine.
+    ///
+    /// Non va sul disco, come le altre due memorie: le prese non si ricordano fra un avvio e
+    /// l'altro (`Config.load`), quindi dopo un riavvio rinascono dal fronte zero → qualcosa e
+    /// questa rinasce con loro.
+    private var armedByWork = false
+    /// Da quando valgono tutte insieme le condizioni della rete del coperchio chiuso.
+    private var closedLidNetSince: Double?
+    /// L'attesa di addormentare l'ha armata la rete del coperchio chiuso, non la fine del lavoro.
+    private var pendingFromNet = false
 
     /// Da dove viene il livello termico.
     ///
@@ -76,6 +91,15 @@ final class AppModel: ObservableObject {
     var caffeinatedSource: () -> Bool = {
         OtherHolders.current().contains { $0.process == "caffeinate" }
     }
+
+    /// Il sistema ha ancora il sonno disattivato?
+    ///
+    /// La rete del coperchio chiuso molla la presa e chiede il sonno a pochi secondi di distanza,
+    /// e fra le due cose c'è l'helper, che passa ogni cinque secondi: finché non ha rimesso il
+    /// sonno possibile, chiederlo sarebbe chiederlo a un Mac a cui è vietato. Iniettabile perché
+    /// la lettura vera è lo stato di tutto il Mac, e un banco che gira accanto all'app installata
+    /// leggerebbe la presa di lei.
+    var sleepDisabledSource: () -> Bool = { HelperControl.sleepDisabledNow() ?? false }
 
     /// Quello che l'app sta davvero tenendo, letto dall'oggetto che lo tiene. Serve al banco.
     var isActuallyHolding: Bool { assertion.held }
@@ -237,6 +261,10 @@ final class AppModel: ObservableObject {
         for riga in LeaseDiff.events(before: previousLeases, after: vive, now: now) { record(riga) }
         previousLeases = vive
 
+        // La rete del coperchio chiuso viene dopo le prenotazioni, perché le serve il conteggio di
+        // adesso, e prima dell'attesa, perché è lei ad armarla quando molla.
+        evaluateClosedLidNet(now: now, leases: count)
+
         // Dopo la politica, non prima: l'attesa deve vedere la configurazione di adesso, compreso
         // un «tieni sveglio» appena riacceso da un lavoro nuovo.
         evaluatePendingSleep(now: now, leases: count)
@@ -252,15 +280,58 @@ final class AppModel: ObservableObject {
         persist()
         record(note)
 
+        // Chi ha acceso: l'automatismo. La rete del coperchio chiuso può mollare solo questo.
+        if note == S.autoArmed { armedByWork = true }
+
         // Se a mollare la presa è stata la **fine del lavoro** e il coperchio è abbassato, mollare
         // non basta: qualcun altro può tenere sveglio il Mac per ore mentre lui non può vederlo.
         if note == S.releasedWorkDone { armPendingSleep() }
+    }
+
+    // ── La rete del coperchio chiuso ─────────────────────────────────────────
+
+    /// Il verdetto di `ClosedLidNet`, a ogni giro, sulle condizioni di **adesso**.
+    ///
+    /// Quando molla non addormenta da sé: arma la stessa attesa della fine del lavoro, già matura
+    /// perché il respiro l'ha pagato lei, e lascia decidere a `evaluatePendingSleep`. Così il sonno
+    /// imposto ha una porta sola, e quello che quella porta ha imparato (il `caffeinate` di Claude
+    /// Code, il rifiuto del sistema scritto nel registro) vale anche qui senza riscriverlo.
+    private func evaluateClosedLidNet(now: Double, leases count: Int) {
+        // «Opera dell'automatismo» vuol dire tutta la presa: un coperchio acceso a mano sopra un
+        // «tieni sveglio» automatico è una sua scelta, e la rete non lo tocca.
+        let nostro = armedByWork && config.screenAwake && (!config.lidAwake || lidArmedByUs)
+        let verdetto = ClosedLidNet.verdict(armedByWork: nostro,
+                                            lidClosed: PowerAssertion.isClamshellClosed(),
+                                            onAC: onAC,
+                                            leases: count,
+                                            heldFor: closedLidNetSince.map { max(0, now - $0) } ?? 0,
+                                            caffeinated: caffeinatedSource,
+                                            grace: grace)
+        switch verdetto {
+        case .idle:
+            closedLidNetSince = nil
+        case .wait:
+            if closedLidNetSince == nil { closedLidNetSince = now }
+        case .release:
+            closedLidNetSince = nil
+            armedByWork = false
+            config.screenAwake = false
+            config.lidAwake = false
+            lastNote = S.releasedClosedLid
+            persist()
+            record(S.releasedClosedLid)
+            // Un secondo oltre il respiro e non il respiro esatto: `now - (now - grace)` può
+            // tornare un'unghia sotto `grace`, e l'attesa aspetterebbe un giro per un arrotondamento.
+            pendingSleepSince = now - grace - 1
+            pendingFromNet = true
+        }
     }
 
     // ── Addormentare davvero ─────────────────────────────────────────────────
 
     /// Arma l'attesa. Da qui in poi decide `evaluatePendingSleep`, giro per giro.
     private func armPendingSleep() {
+        pendingFromNet = false
         pendingSleepSince = Date().timeIntervalSince1970
         let chiuso = PowerAssertion.isClamshellClosed()
         lastNote = chiuso
@@ -276,15 +347,33 @@ final class AppModel: ObservableObject {
     /// scrivere, e mezz'ora dopo si alza: è quello il momento, e nessun timer armato prima lo sa.
     private func evaluatePendingSleep(now: Double, leases count: Int) {
         guard let since = pendingSleepSince else { return }
+        let chiuso = PowerAssertion.isClamshellClosed()
+        if pendingFromNet {
+            // La rete vale solo nel suo caso. Riaperto il coperchio o tornata la corrente, il
+            // sonno che aveva chiesto non ha più un motivo: a coperchio alzato «disattiva quando il
+            // lavoro finisce» spento deve continuare a voler dire che il Mac non si addormenta.
+            guard chiuso, !onAC else {
+                pendingSleepSince = nil
+                pendingFromNet = false
+                record(S.logSleepCancelled)
+                lastNote = nil
+                return
+            }
+            // L'helper non ha ancora rimesso il sonno possibile: si aspetta il suo giro.
+            guard !sleepDisabledSource() else { return }
+        }
         let caffeinated = caffeinatedSource()
         let idle = PowerAssertion.userIdleSeconds()
         // Mai svegliato in questa vita dell'app: allora nessun risveglio recente da rispettare.
         let dalRisveglio = lastWake.map { now - $0 } ?? .infinity
-        let verdetto = SleepDecision.verdict(lidClosed: PowerAssertion.isClamshellClosed(),
+        let verdetto = SleepDecision.verdict(lidClosed: chiuso,
                                              leases: count,
                                              screenAwake: config.screenAwake,
                                              lidAwake: config.lidAwake,
-                                             releaseWhenWorkEnds: config.releaseWhenWorkEnds,
+                                             // La rete ha già deciso per conto dell'interruttore,
+                                             // ed è l'unico caso in cui può farlo.
+                                             releaseWhenWorkEnds: config.releaseWhenWorkEnds
+                                                 || pendingFromNet,
                                              pendingFor: max(0, now - since),
                                              userIdle: idle,
                                              audioPlaying: Audio.isPlaying(),
@@ -296,10 +385,12 @@ final class AppModel: ObservableObject {
             return
         case .cancel:
             pendingSleepSince = nil
+            pendingFromNet = false
             record(S.logSleepCancelled)
             lastNote = nil
         case .sleepNow:
             pendingSleepSince = nil
+            pendingFromNet = false
             record(S.logSleepNow)
             if !sleepAction() { record(S.logSleepFailed) }
         }
@@ -368,6 +459,8 @@ final class AppModel: ObservableObject {
     // ── Comandi dal menu ─────────────────────────────────────────────────────
 
     func setScreenAwake(_ on: Bool) {
+        // Toccato a mano, in un senso o nell'altro, smette di essere opera dell'automatismo.
+        armedByWork = false
         config.screenAwake = on
         lastNote = nil
         persist()
@@ -437,9 +530,16 @@ final class AppModel: ObservableObject {
         refresh()
     }
 
+    // Ogni interruttore mosso a mano scrive una riga, e solo quando cambia davvero: il 12/10 uno di
+    // questi è stato trovato spento dopo tre notti finite al 15%, e il registro non sapeva dire né
+    // quando né da chi. La riga si scrive dopo aver cambiato la configurazione, così porta lo
+    // stato nuovo come tutte le altre.
+
     func setBatteryFloorOn(_ on: Bool) {
+        let cambiato = on != config.batteryFloorOn
         config.batteryFloorOn = on
         persist()
+        if cambiato { record(S.logBatteryFloorOn(on)) }
         refresh()
     }
 
@@ -447,6 +547,7 @@ final class AppModel: ObservableObject {
         guard v != config.batteryFloor else { return }
         config.batteryFloor = v
         persist()
+        record(S.logBatteryFloor(v))
         refresh()
     }
 
@@ -455,6 +556,7 @@ final class AppModel: ObservableObject {
         guard d != config.wipeDuration else { return }
         config.wipeDuration = d
         persist()
+        record(S.logWipeDuration(d.minutes))
     }
 
     /// Avvia la pulizia della tastiera.
@@ -492,18 +594,26 @@ final class AppModel: ObservableObject {
     }
 
     func setLaunchAtLogin(_ on: Bool) {
+        let prima = launchesAtLogin
         LoginItem.set(on)
         launchesAtLogin = LoginItem.isEnabled
+        // Si scrive ciò che il sistema ha fatto, non ciò che gli è stato chiesto: se la richiesta
+        // non è passata, una riga «attivato» sarebbe una bugia nel file che esiste per non dirne.
+        if launchesAtLogin != prima { record(S.logLaunchAtLogin(launchesAtLogin)) }
     }
 
     func setReleaseWhenWorkEnds(_ on: Bool) {
+        let cambiato = on != config.releaseWhenWorkEnds
         config.releaseWhenWorkEnds = on
         persist()
+        if cambiato { record(S.logReleaseWhenWorkEnds(on)) }
     }
 
     func setAutoArm(_ on: Bool) {
+        let cambiato = on != config.autoArmOnWork
         config.autoArmOnWork = on
         persist()
+        if cambiato { record(S.logAutoArm(on)) }
         // Acceso adesso con un lavoro già in corso: si attiva subito invece di aspettare il
         // prossimo lavoro, che è ciò che chiunque si aspetta premendo quell'interruttore.
         if on { apply(.autoArmSwitchedOn(leases: leaseCount)) }

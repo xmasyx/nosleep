@@ -5,6 +5,21 @@ something new arrives, the patch number when something already there gets fixed.
 
 ## Unreleased
 
+### A closed lid on battery no longer drains the night
+
+- With «Release when the work ends» switched off and automatic turn-on switched on, the first job
+  armed keep-awake and the lid, and nothing ever let go again: the end of the work did not count by
+  design, and the only exit left was the battery floor. A Mac closed at 80% was found at 15% in the
+  morning, three nights in a row. There is now a net for exactly that case: when keep-awake was
+  turned on by the automatism, the lid is closed, the Mac is on battery and no job has been running
+  for three minutes, the app lets go and puts the Mac to sleep.
+- The net only releases what the automatism took. Keep-awake switched on by hand is left alone, so
+  closing the lid to finish a download still works, with the battery floor as the only limit. With
+  the lid open, or on AC power, nothing changes.
+- Every switch now leaves a line in the log when it is moved by hand. Six of them were silent,
+  «Release when the work ends» among them, so when it was found switched off the log could say
+  neither when nor by whom.
+
 ### Keyboard cleaning really blocks the keys
 
 - A bare modifier key used to pass straight through the lock. It looked harmless — a lone ⌥ types

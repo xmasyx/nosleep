@@ -561,6 +561,210 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         exit(0)
     }
 
+    /// La rete del coperchio chiuso provata sul cablaggio, con la notte del 12/10 rigiocata passo
+    /// per passo: la regola pura ha i suoi test, qui si prova che l'app la chiami con gli argomenti
+    /// giusti e che **agisca** — presa mollata, sonno chiesto una volta sola, riga nel registro.
+    ///
+    /// Coperchio, corrente, respiro e stato del sonno sono finti: il banco non addormenta il Mac e
+    /// non prova il Mac vero. Quella prova resta dalle sue mani (ISC-97).
+    @MainActor static func checkLidNet() -> Never {
+        var chiamate = 0
+        var allaPresa = false
+        var sonnoVietato = false
+        let store = LeaseStore(directory: Paths.leases())
+        func ora() -> Double { Date().timeIntervalSince1970 }
+
+        /// Lo stato che ha fatto il danno: automatico acceso, «disattiva quando il lavoro finisce»
+        /// spento.
+        func nuovo() -> AppModel {
+            chiamate = 0
+            allaPresa = false
+            sonnoVietato = false
+            PowerAssertion.clamshellOverride = false
+            _ = store.release(id: "banco-rete")
+            let m = AppModel()
+            m.thermalSource = { .nominal }
+            m.temperatureSource = { .init(die: 40, board: 40, battery: 30) }
+            m.powerReadingSource = { (80, allaPresa) }
+            m.caffeinatedSource = { false }
+            m.sleepDisabledSource = { sonnoVietato }
+            m.sleepAction = { chiamate += 1; return true }
+            m.grace = 0
+            m.setAutoArm(true)
+            m.setReleaseWhenWorkEnds(false)
+            return m
+        }
+        /// Una chat che lavora e finisce, a coperchio alzato: l'automatismo arma, poi le
+        /// prenotazioni tornano a zero e, con l'interruttore spento, la presa resta.
+        func lavoroFinito(_ m: AppModel) {
+            _ = store.hold(id: "banco-rete", ttl: 3600, label: "Banco", now: ora())
+            m.tickNow()
+            guard m.isActuallyHolding else { print("✗ il lavoro non ha armato niente: il banco non misura la cosa giusta"); exit(1) }
+            _ = store.release(id: "banco-rete")
+            m.tickNow()
+            guard m.isActuallyHolding else { print("✗ con l'interruttore spento la fine del lavoro ha mollato: il banco non riproduce il 12/10"); exit(1) }
+        }
+        func registro() -> String { (try? String(contentsOf: Paths.log(), encoding: .utf8)) ?? "" }
+
+        // 1. **La notte del 12/10.** Il lavoro finisce a coperchio alzato e a corrente; poi si
+        //    stacca la spina; poi si abbassa il coperchio. Solo all'ultimo passo deve scattare.
+        var m = nuovo()
+        allaPresa = true
+        lavoroFinito(m)
+        m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato a coperchio alzato e a corrente"); exit(1) }
+        print("  alzato, a corrente       → tiene        (l'interruttore spento vale ancora)")
+        allaPresa = false
+        m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato a coperchio alzato"); exit(1) }
+        print("  alzato, a batteria       → tiene        (polo negativo)")
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard !m.isActuallyHolding else { print("✗ coperchio chiuso a batteria senza lavoro: tiene ancora (il 12/10)"); exit(1) }
+        guard chiamate == 1 else { print("✗ doveva chiedere il sonno una volta sola, l'ha chiesto \(chiamate)"); exit(1) }
+        guard registro().contains(S.releasedClosedLid) else { print("✗ ha mollato senza scriverlo nel registro"); exit(1) }
+        print("  chiuso, a batteria       → molla e dorme (la notte del 12/10)")
+
+        // 2. Acceso **a mano**: la rete tace. È il polo che protegge la sua scelta.
+        m = nuovo()
+        m.setScreenAwake(true)
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato una presa accesa a mano"); exit(1) }
+        print("  acceso a mano            → tiene        (la sua scelta)")
+
+        // 3. Acceso dall'automatismo e poi ritoccato a mano: da lì è suo.
+        m = nuovo()
+        lavoroFinito(m)
+        m.setScreenAwake(false)
+        m.setScreenAwake(true)
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato dopo che lui l'aveva riacceso a mano"); exit(1) }
+        print("  riacceso a mano          → tiene        (toccato da lui, non è più nostro)")
+
+        // 4. Una prenotazione viva: è il lavoro a coperchio chiuso per cui l'app esiste.
+        m = nuovo()
+        _ = store.hold(id: "banco-rete", ttl: 3600, label: "Banco", now: ora())
+        m.tickNow()
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato sotto un lavoro vivo"); exit(1) }
+        print("  chiuso, lavoro vivo      → tiene        (il polo che conta più di tutti)")
+        _ = store.release(id: "banco-rete")
+
+        // 5. A corrente non scatta, e scatta appena la spina si stacca: guarda lo stato.
+        m = nuovo()
+        allaPresa = true
+        lavoroFinito(m)
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato a corrente"); exit(1) }
+        allaPresa = false
+        m.tickNow(); m.tickNow()
+        guard chiamate == 1, !m.isActuallyHolding else { print("✗ staccata la spina a coperchio chiuso non ha mollato (\(chiamate))"); exit(1) }
+        print("  chiuso, spina staccata   → molla e dorme (lo stato, non il fronte)")
+
+        // 6. Il respiro è vero: con i tre minuti veri, i primi giri non mollano niente.
+        m = nuovo()
+        lavoroFinito(m)
+        m.grace = SleepDecision.grace
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato prima dei \(Int(SleepDecision.grace)) secondi di respiro"); exit(1) }
+        print("  primi giri               → tiene        (il respiro è vero)")
+
+        // 7. Il `caffeinate` di Claude Code: aspetta, e appena scade molla.
+        m = nuovo()
+        lavoroFinito(m)
+        m.caffeinatedSource = { true }
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0, m.isActuallyHolding else { print("✗ ha mollato con il caffeinate vivo"); exit(1) }
+        m.caffeinatedSource = { false }
+        m.tickNow(); m.tickNow()
+        guard chiamate == 1 else { print("✗ finito il caffeinate non ha addormentato (\(chiamate))"); exit(1) }
+        print("  chiuso, caffeinate       → aspetta, poi molla e dorme")
+
+        // 8. ISC-96: finché il sistema ha il sonno disattivato non lo si chiede, e appena
+        //    l'helper lo rimette lo si chiede una volta.
+        m = nuovo()
+        lavoroFinito(m)
+        sonnoVietato = true
+        PowerAssertion.clamshellOverride = true
+        m.tickNow(); m.tickNow()
+        guard !m.isActuallyHolding else { print("✗ col sonno ancora vietato non ha nemmeno mollato"); exit(1) }
+        guard chiamate == 0 else { print("✗ ha chiesto il sonno a un Mac a cui era ancora vietato"); exit(1) }
+        sonnoVietato = false
+        m.tickNow(); m.tickNow()
+        guard chiamate == 1 else { print("✗ rimesso il sonno possibile non l'ha chiesto (\(chiamate))"); exit(1) }
+        print("  sonno ancora vietato     → aspetta l'helper, poi dorme")
+
+        // 9. ISC-96: coperchio riaperto prima che il sonno parta: si annulla, e non torna.
+        m = nuovo()
+        lavoroFinito(m)
+        sonnoVietato = true
+        PowerAssertion.clamshellOverride = true
+        m.tickNow()
+        PowerAssertion.clamshellOverride = false
+        sonnoVietato = false
+        m.tickNow(); m.tickNow()
+        guard chiamate == 0 else { print("✗ ha addormentato dopo che il coperchio si era riaperto"); exit(1) }
+        guard registro().contains(S.logSleepCancelled) else { print("✗ ha annullato senza scriverlo"); exit(1) }
+        print("  riaperto in attesa       → annulla      (a coperchio alzato non si impone niente)")
+
+        // 10. Con l'helper: il coperchio che la regola ha armato si molla, quello acceso a mano no.
+        //     È il cablaggio vero del 12/10, dove a tenere sveglio il Mac chiuso era il coperchio.
+        if AppModel().helperInstalled {
+            m = nuovo()
+            m.setLidFollowsAwake(true)
+            lavoroFinito(m)
+            guard m.config.lidAwake else { print("✗ il coperchio non ha seguito: il banco non misura la cosa giusta"); exit(1) }
+            PowerAssertion.clamshellOverride = true
+            m.tickNow(); m.tickNow()
+            guard chiamate == 1, !m.config.lidAwake else { print("✗ col coperchio armato dalla regola non ha mollato (\(chiamate))"); exit(1) }
+            print("  coperchio della regola   → molla e dorme")
+
+            m = nuovo()
+            m.setLidFollowsAwake(false)
+            lavoroFinito(m)
+            m.setLidAwake(true)
+            PowerAssertion.clamshellOverride = true
+            m.tickNow(); m.tickNow()
+            guard chiamate == 0, m.config.lidAwake else { print("✗ ha mollato un coperchio acceso a mano"); exit(1) }
+            print("  coperchio acceso a mano  → tiene        (la sua scelta)")
+            m.setLidAwake(false)
+        } else {
+            print("  saltati i due poli del coperchio: l'helper non è installato su questa macchina")
+        }
+
+        // 11. ISC-93: ogni interruttore mosso lascia la sua riga. L'avvio all'accesso resta fuori
+        //     dal banco di proposito: `SMAppService` toccherebbe la voce vera di questo Mac.
+        m = nuovo()
+        m.setReleaseWhenWorkEnds(true)
+        m.setAutoArm(false)
+        m.setBatteryFloorOn(false)
+        m.setBatteryFloor(30)
+        m.setWipeDuration(.five)
+        let attese = [S.logReleaseWhenWorkEnds(true), S.logReleaseWhenWorkEnds(false),
+                      S.logAutoArm(true), S.logAutoArm(false),
+                      S.logBatteryFloorOn(false), S.logBatteryFloor(30), S.logWipeDuration(5)]
+        let scritto = registro()
+        for riga in attese where !scritto.contains(riga) {
+            print("✗ interruttore mosso senza traccia nel registro: «\(riga)»"); exit(1)
+        }
+        // Rimesso lo stesso valore, non si scrive niente: una riga per un non-evento è rumore.
+        let prima = registro().components(separatedBy: "\n").count
+        m.setReleaseWhenWorkEnds(true)
+        m.setBatteryFloor(30)
+        guard registro().components(separatedBy: "\n").count == prima else { print("✗ una riga scritta per un valore che non è cambiato"); exit(1) }
+        print("  interruttori mossi       → una riga ciascuno, nessuna per un non-evento")
+
+        PowerAssertion.clamshellOverride = nil
+        print("✓ a coperchio chiuso, a batteria e senza lavoro molla ciò che ha acceso l'automatismo, e solo quello")
+        exit(0)
+    }
+
     /// Lo stato dell'avvio all'accesso.
     ///
     /// **Va eseguito dal bundle installato**, non dal binario in `.build`: `SMAppService.mainApp`
@@ -803,6 +1007,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
             || CommandLine.arguments.contains("--selftest-thermal")
             || CommandLine.arguments.contains("--selftest-battery")
             || CommandLine.arguments.contains("--selftest-sleep")
+            || CommandLine.arguments.contains("--selftest-lidnet")
             || CommandLine.arguments.contains("--selftest-lidfollow")
             || CommandLine.arguments.contains("--selftest-login")
             || CommandLine.arguments.contains("--selftest-prefs")
@@ -848,6 +1053,7 @@ final class ShotDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--selftest-thermal") { Self.checkThermal() }
         if CommandLine.arguments.contains("--selftest-battery") { Self.checkBattery() }
         if CommandLine.arguments.contains("--selftest-sleep") { Self.checkSleep() }
+        if CommandLine.arguments.contains("--selftest-lidnet") { Self.checkLidNet() }
         if CommandLine.arguments.contains("--selftest-lidfollow") { Self.checkLidFollow() }
         if CommandLine.arguments.contains("--selftest-login") { Self.checkLogin() }
         if CommandLine.arguments.contains("--selftest-prefs") { Self.checkPreferences() }

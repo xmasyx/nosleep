@@ -334,6 +334,100 @@ struct SleepDecisionTests {
     }
 }
 
+@Suite("La rete del coperchio chiuso")
+struct ClosedLidNetTests {
+
+    /// Il caso pieno è il default, così ogni prova nomina solo la condizione che toglie.
+    private func v(armed: Bool = true, lid: Bool = true, onAC: Bool = false, leases: Int = 0,
+                   heldFor: Double = SleepDecision.grace,
+                   caffeinated: Bool = false) -> ClosedLidNet.Verdict {
+        ClosedLidNet.verdict(armedByWork: armed, lidClosed: lid, onAC: onAC, leases: leases,
+                             heldFor: heldFor, caffeinated: { caffeinated })
+    }
+
+    @Test("ISC-94 — la notte del 12/10: acceso da solo, coperchio chiuso, a batteria, nessun lavoro")
+    func theNight() { #expect(v() == .release) }
+
+    @Test("ISC-94 — molla se e solo se valgono tutte e quattro (tabella esaustiva)")
+    func exhaustive() {
+        for armed in [true, false] {
+            for lid in [true, false] {
+                for onAC in [true, false] {
+                    for leases in [0, 1, 3] {
+                        let atteso: ClosedLidNet.Verdict =
+                            (armed && lid && !onAC && leases == 0) ? .release : .idle
+                        #expect(v(armed: armed, lid: lid, onAC: onAC, leases: leases) == atteso,
+                                "armed=\(armed) lid=\(lid) onAC=\(onAC) leases=\(leases)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("una presa accesa a mano non si tocca (il polo che protegge la sua scelta)")
+    func neverAHandArmedHold() { #expect(v(armed: false) == .idle) }
+
+    @Test("con una prenotazione viva non si molla: è il lavoro a coperchio chiuso")
+    func neverUnderWork() { #expect(v(leases: 1) == .idle) }
+
+    @Test("a coperchio alzato e a corrente la rete non esiste")
+    func onlyItsCase() {
+        #expect(v(lid: false) == .idle)
+        #expect(v(onAC: true) == .idle)
+    }
+
+    @Test("prima del respiro aspetta, e il respiro è quello di SleepDecision")
+    func grace() {
+        #expect(v(heldFor: 0) == .wait)
+        #expect(v(heldFor: SleepDecision.grace - 1) == .wait)
+        #expect(v(heldFor: SleepDecision.grace) == .release)
+    }
+
+    @Test("il caffeinate fa aspettare, non azzera")
+    func caffeinateWaits() { #expect(v(caffeinated: true) == .wait) }
+
+    @Test("il caffeinate si legge solo quando tutto il resto ha già detto sì")
+    func caffeinateIsAskedLast() {
+        var letture = 0
+        func chiedi(armed: Bool = true, heldFor: Double = SleepDecision.grace) {
+            _ = ClosedLidNet.verdict(armedByWork: armed, lidClosed: true, onAC: false, leases: 0,
+                                     heldFor: heldFor, caffeinated: { letture += 1; return false })
+        }
+        chiedi(armed: false)
+        chiedi(heldFor: 0)
+        #expect(letture == 0)
+        chiedi()
+        #expect(letture == 1)
+    }
+}
+
+@Suite("Gli interruttori lasciano traccia")
+struct SwitchLogWordsTests {
+
+    @Test("ISC-93 — acceso e spento sono due righe diverse, e nessuna è vuota")
+    func onAndOffDiffer() {
+        let coppie: [(String, String)] = [
+            (S.logReleaseWhenWorkEnds(true), S.logReleaseWhenWorkEnds(false)),
+            (S.logAutoArm(true), S.logAutoArm(false)),
+            (S.logBatteryFloorOn(true), S.logBatteryFloorOn(false)),
+            (S.logLaunchAtLogin(true), S.logLaunchAtLogin(false)),
+        ]
+        for (acceso, spento) in coppie {
+            #expect(!acceso.isEmpty)
+            #expect(acceso != spento)
+        }
+        // Tutte distinte fra loro: due interruttori con la stessa riga sono un interruttore muto.
+        let tutte = coppie.flatMap { [$0.0, $0.1] } + [S.logBatteryFloor(15), S.logWipeDuration(2)]
+        #expect(Set(tutte).count == tutte.count)
+    }
+
+    @Test("la riga porta il valore scelto, non solo il fatto che è cambiato")
+    func carriesTheValue() {
+        #expect(L.$current.withValue(.it) { S.logBatteryFloor(15) } == "soglia di batteria portata al 15%")
+        #expect(L.$current.withValue(.it) { S.logWipeDuration(5) } == "durata della pulizia portata a 5 min")
+    }
+}
+
 @Suite("Le parole del sonno")
 struct SleepWordsTests {
 

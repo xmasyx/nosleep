@@ -80,7 +80,7 @@ echo "▸ banco del cavallo…"
 # corsa verde prova che il runner li regge, NOSLEEP_PURE_BENCHES esce dal workflow e questo ramo
 # torna a essere inutile.
 if [[ "${NOSLEEP_PURE_BENCHES:-0}" == "1" ]]; then
-    echo "⚠︎ SALTO --selftest-thermal, --selftest-sleep, --selftest-lidfollow, --selftest-wipe, --selftest-prefs: chiedono schermo, tastiera e gestione dell'energia reali"
+    echo "⚠︎ SALTO --selftest-thermal, --selftest-sleep, --selftest-lidnet, --selftest-lidfollow, --selftest-wipe, --selftest-prefs: chiedono schermo, tastiera e gestione dell'energia reali"
 else
     # Il limitatore termico provato end-to-end: non che la politica decida giusto, che l'app AGISCA.
     echo "▸ banco del limitatore termico…"
@@ -95,6 +95,11 @@ else
     # alzato.
     echo "▸ banco dell'addormentamento…"
     "$ROOT/.build/release/NoSleepApp" --selftest-sleep
+
+    # La rete del coperchio chiuso, con la notte del 12/10 rigiocata: tre notti finite al 15% perché
+    # una presa accesa dall'automatismo non aveva più niente che la mollasse.
+    echo "▸ banco della rete del coperchio chiuso…"
+    "$ROOT/.build/release/NoSleepApp" --selftest-lidnet
 
     # Il coperchio che segue «tieni sveglio», provato sul cablaggio e non solo sulla regola: il difetto
     # che i test puri non vedono è la regola giusta chiamata con gli argomenti sbagliati.

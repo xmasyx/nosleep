@@ -334,6 +334,12 @@ public enum S {
     public static var releasedWorkDone: String {
         L.t(en: "turned off when the job ended", it: "disattivato, il lavoro è finito")
     }
+    public static var releasedClosedLid: String {
+        L.t(
+            en: "turned off, lid closed on battery and no job running",
+            it: "disattivato, coperchio chiuso a batteria e nessun lavoro"
+        )
+    }
     public static var rearmedBattery: String {
         L.t(en: "turned back on, the battery no longer blocks it and the job is still running",
             it: "riattivato, la batteria non blocca più e il lavoro è ancora in corso")
@@ -393,6 +399,39 @@ public enum S {
                 it: "coperchio preparato insieme a tieni sveglio"
             )
             : L.t(en: "stopped arming the lid", it: "coperchio non più preparato")
+    }
+    // Gli interruttori di comportamento. Fino al 12/10/2026 erano muti, e il giorno che uno di loro
+    // è stato trovato spento il registro non sapeva dire né quando né da chi: tre notti finite al
+    // 15% di batteria e nessuna riga da cui partire.
+    public static func logReleaseWhenWorkEnds(_ on: Bool) -> String {
+        on
+            ? L.t(en: "release when the work ends turned on by hand",
+                  it: "disattiva quando il lavoro finisce, attivato a mano")
+            : L.t(en: "release when the work ends turned off by hand",
+                  it: "disattiva quando il lavoro finisce, disattivato a mano")
+    }
+    public static func logAutoArm(_ on: Bool) -> String {
+        on
+            ? L.t(en: "turn on automatically turned on by hand",
+                  it: "attiva automaticamente, attivato a mano")
+            : L.t(en: "turn on automatically turned off by hand",
+                  it: "attiva automaticamente, disattivato a mano")
+    }
+    public static func logBatteryFloorOn(_ on: Bool) -> String {
+        on
+            ? L.t(en: "battery floor turned on by hand", it: "soglia di batteria attivata a mano")
+            : L.t(en: "battery floor turned off by hand", it: "soglia di batteria disattivata a mano")
+    }
+    public static func logBatteryFloor(_ p: Int) -> String {
+        L.t(en: "battery floor moved to \(p)%", it: "soglia di batteria portata al \(p)%")
+    }
+    public static func logWipeDuration(_ minutes: Int) -> String {
+        L.t(en: "cleaning time set to \(minutes) min", it: "durata della pulizia portata a \(minutes) min")
+    }
+    public static func logLaunchAtLogin(_ on: Bool) -> String {
+        on
+            ? L.t(en: "open at login turned on by hand", it: "avvio all'accesso attivato a mano")
+            : L.t(en: "open at login turned off by hand", it: "avvio all'accesso disattivato a mano")
     }
     public static var logQuit: String {
         L.t(en: "turned everything off on quit", it: "chiusura, disattivato tutto")
