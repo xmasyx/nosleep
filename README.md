@@ -41,11 +41,14 @@ claim expires.
 Homebrew is the shortest path:
 
 ```sh
+brew trust xmasyx/tap      # once per Mac: Homebrew loads a third-party tap only after you trust it
 brew install --cask xmasyx/tap/nosleep
 xattr -dr com.apple.quarantine /Applications/NoSleep.app   # once: the app is not notarized
 ```
 
-The second line is needed once, because NoSleep is signed with its own stable certificate and not
+The first line is needed once per Mac: recent Homebrew refuses to load a cask from a tap that is not its own (`Refusing to load cask … from untrusted tap`) until you trust it, and it remembers the choice.
+
+The `xattr` line is needed once, because NoSleep is signed with its own stable certificate and not
 notarized by Apple: without it macOS refuses to open the app (System Settings → Privacy & Security
 → *Open Anyway* does the same thing). From then on NoSleep updates from its own panel with
 **Check for updates**: it runs `brew upgrade`, clears the flag on the new copy and relaunches.
