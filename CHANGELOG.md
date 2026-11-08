@@ -3,7 +3,7 @@
 Dates are release dates. Versions follow [semver](https://semver.org): the minor number moves when
 something new arrives, the patch number when something already there gets fixed.
 
-## Unreleased
+## 1.3.3 — 2026-11-08
 
 ### A closed lid on battery no longer drains the night
 
